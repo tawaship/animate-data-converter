@@ -46,7 +46,6 @@ var vm__namespace = /*#__PURE__*/_interopNamespaceDefault(vm);
  *   null (published content clears a blend with `compositeOperation: undefined`,
  *   and createjs reads such properties by truthiness), and -0 becomes 0
  */
-const SCHEMA_VERSION = 0;
 /**
  * Display properties recorded as the initial state of an instance.
  */
@@ -58,6 +57,9 @@ const INIT_KEYS = [
  * Text properties recorded for a Text.
  */
 const TEXT_KEYS = ['text', 'font', 'color', 'textAlign', 'textBaseline', 'lineHeight', 'lineWidth', 'maxWidth', 'outline'];
+
+/** The version of this package (written in from package.json when the package is built) */
+const VERSION = "0.0.0";
 
 /**
  * Properties a tween writes that carry no display state, left out of the
@@ -118,7 +120,7 @@ function extract(cjs, source) {
         classes: new Map(),
         frameImages: new Map(),
         definition: {
-            schemaVersion: SCHEMA_VERSION,
+            converterVersion: VERSION,
             properties: readProperties(properties),
             manifest: [],
             spriteSheets: [],
@@ -1334,8 +1336,8 @@ function runCli(args, io) {
 }
 
 exports.INIT_KEYS = INIT_KEYS;
-exports.SCHEMA_VERSION = SCHEMA_VERSION;
 exports.TEXT_KEYS = TEXT_KEYS;
+exports.VERSION = VERSION;
 exports.extract = extract;
 exports.extractPublished = extractPublished;
 exports.extractPublishedFile = extractPublishedFile;

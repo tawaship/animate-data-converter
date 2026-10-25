@@ -14,6 +14,20 @@ const banner = [
 	''
 ].join('\n');
 
+// Writes versions from package.json into the sources that hold their placeholders
+function versions(values) {
+	return {
+		name: 'versions',
+		transform(code) {
+			let result = code;
+			Object.keys(values).forEach(key => {
+				result = result.split("'" + key + "'").join(JSON.stringify(values[key]));
+			});
+			return result === code ? null : { code: result, map: null };
+		}
+	};
+}
+
 export default (async () => {
 	if (process.env.PROD) {
 		await deleteAsync(['./dist/', './types/']);
@@ -35,7 +49,8 @@ export default (async () => {
 				clearScreen: false
 			},
 			plugins: [
-				typescript()
+				typescript(),
+				versions({ __PACKAGE_VERSION__: version })
 			]
 		}
 	];

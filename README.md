@@ -86,6 +86,9 @@ shared by every instance:
 - Drawing commands of shapes, including gradient and bitmap fills
 - Sprite symbols with their sprite sheet frames (`lib.ssMetadata`), Bitmap symbols with their images
   (manifest ids), the manifest itself, and the document properties (size, frame rate, background color)
+- `converterVersion`: the version of this package that extracted the definition (also exported as
+  `VERSION`). What reads a definition later can tell from it whether it knows the definition's form, for
+  definitions kept as files and read by another version
 
 ### Content the converter does not support
 

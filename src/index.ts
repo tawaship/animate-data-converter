@@ -3,7 +3,8 @@ export { loadPublished, extractPublished, extractPublishedFile } from './load';
 export type { ILoadOptions, ILoadedContent } from './load';
 export { runCli } from './cli';
 export type { ICliIO } from './cli';
-export { SCHEMA_VERSION, INIT_KEYS, TEXT_KEYS } from './types';
+export { INIT_KEYS, TEXT_KEYS } from './types';
+export { VERSION } from './version';
 export type {
 	IDefinition, TSymbolDef, IMovieClipSymbolDef, ISpriteSymbolDef, IBitmapSymbolDef,
 	IInstanceArgsDef, ISlotDef, IMemberDef, ILabelDef, ITweenDef, IActionDef,

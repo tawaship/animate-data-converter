@@ -12,7 +12,6 @@
  *   null (published content clears a blend with `compositeOperation: undefined`,
  *   and createjs reads such properties by truthiness), and -0 becomes 0
  */
-export declare const SCHEMA_VERSION = 0;
 /**
  * Display properties recorded as the initial state of an instance.
  */
@@ -276,7 +275,12 @@ export interface IIssue {
  * equal footing; which one to use as a root is up to the consumer.
  */
 export interface IDefinition {
-    schemaVersion: number;
+    /**
+     * The version of animate-data-converter that extracted the definition. What
+     * reads a definition tells by it whether it can (a version it does not
+     * read, or one newer than it knows of, which may hold what it leaves out)
+     */
+    converterVersion: string;
     /** Primitive entries of the published `lib.properties` (width, height, fps, ...) */
     properties: IPropMapDef;
     /** `lib.properties.manifest`: the images and sounds the content loads */

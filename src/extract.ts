@@ -6,8 +6,9 @@ import {
 	IDefinition, IMovieClipSymbolDef, ISlotDef, ITweenDef, IActionDef, IPropMapDef, IStateEntryDef,
 	IGraphicsDef, IGraphicsCommandDef, ISpriteDef, IBitmapDef, IFilterDef, ICacheDef, IButtonDef,
 	IFilterCacheEntryDef, IRectDef, IDataMap, TDataValue, TFrameValue, TTargetDef,
-	ISpriteSheetDef, IManifestEntryDef, TSymbolDef, SCHEMA_VERSION, INIT_KEYS, TEXT_KEYS
+	ISpriteSheetDef, IManifestEntryDef, TSymbolDef, INIT_KEYS, TEXT_KEYS
 } from './types';
+import { VERSION } from './version';
 
 interface IContext {
 	cjs: ICreatejs;
@@ -112,7 +113,7 @@ export function extract(cjs: ICreatejs, source: IExtractSource): IDefinition {
 		classes: new Map<string, TLibraryClass>(),
 		frameImages: new Map<object, { sheet: string; frame: number }>(),
 		definition: {
-			schemaVersion: SCHEMA_VERSION,
+			converterVersion: VERSION,
 			properties: readProperties(properties),
 			manifest: [],
 			spriteSheets: [],
