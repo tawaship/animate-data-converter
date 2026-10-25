@@ -1,0 +1,41 @@
+{
+  "name": "@tawaship/animate-data-converter",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reads Adobe Animate HTML5 Canvas publish output and extracts engine-independent symbol and timeline definitions.",
+  "main": "dist/animate-data-converter.cjs.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "dist",
+    "types",
+    "bin"
+  ],
+  "scripts": {
+    "rollup": "rollup -c --bundleConfigAsCjs",
+    "d": "tsc --emitDeclarationOnly --declaration --outDir ./types",
+    "build": "npm run rollup -- --environment PROD && npm run d && echo done."
+  },
+  "keywords": [
+    "createjs",
+    "adobe-animate"
+  ],
+  "author": "tawaship",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/node": "^20.19.43",
+    "del": "^8.0.1",
+    "rollup": "^4.62.2",
+    "tslib": "^2.8.1",
+    "typescript": "^6.0.3"
+  },
+  "bin": {
+    "animate-data-converter": "bin/animate-data-converter.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@tawaship/createjs-module": "^1.1.0"
+  }
+}

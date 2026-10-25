@@ -1,0 +1,13 @@
+{
+  "include": ["src/**/*.ts"],
+  "compilerOptions": {
+    "target": "ES6",
+    "moduleResolution": "bundler",
+    "rootDir": "./src",
+    "newLine": "lf",
+    "strict": true,
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "src/**/*.d.ts"]
+}
