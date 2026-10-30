@@ -14,7 +14,8 @@
     "rollup": "rollup -c --bundleConfigAsCjs",
     "d": "tsc --emitDeclarationOnly --declaration --outDir ./types",
     "build": "npm run rollup -- --environment PROD && npm run d && echo done.",
-    "docs": "typedoc"
+    "docs": "typedoc",
+    "prepublishOnly": "node scripts/check-publish.js"
   },
   "keywords": [
     "createjs",
