@@ -236,6 +236,20 @@ player; to play as CreateJS 1.0.0 does:
 
 `@tawaship/pixi-animate-runtime` is a player built this way, checked frame by frame against CreateJS.
 
+## Claude Code skills
+
+The package comes with a skill for Claude Code (Anthropic's AI coding tool) in `dist-skills/`:
+`animate-data-converter-guide`, which tells it how to extract definitions and read them. To let Claude Code use it
+in your project, copy it into the project's `.claude/skills/`:
+
+```
+mkdir -p .claude/skills
+cp -r node_modules/@tawaship/animate-data-converter/dist-skills/* .claude/skills/
+```
+
+Copy it again after updating the package. The skill names the versions it was written for; with another
+version, it tells Claude Code to follow the type definitions in `node_modules` where they disagree.
+
 ## How correctness is checked
 
 The converter was developed with Claude (Anthropic's AI assistant). Its correctness rests on testing rather
@@ -252,6 +266,7 @@ are put into the definition on purpose to confirm that the comparison notices th
   evaluated at every frame, as plain data written in a compact form (`expand()` and `--expanded` give every value
   as it is), with the command line tool and the API, running the published code in a sandbox (QuickJS on
   WebAssembly), and lists the features it does not support
+- Claude Code skills in `dist-skills/`, published with the package
 
 ## License
 
