@@ -40,7 +40,7 @@ The content is assumed to be published by **Adobe Animate 24.0.15** for HTML5 Ca
 npx animate-data-converter game.js --out game.json --pretty
 ```
 
-- `--out <file>`: where to write (standard output without it). `--pretty`: indented JSON. `--expanded`: the expanded form instead of the compact one
+- `-o, --out <file>`: where to write (standard output without it). `-p, --pretty`: indented JSON. `-e, --expanded`: the expanded form instead of the compact one. `-f, --force`: write even with unsupported features. `-h, --help`: the usage
 - Exit code `1` when the content uses unsupported features (each one is listed, nothing is written unless `--force` is given), `2` when the file cannot be read or is not Animate HTML5 Canvas output
 
 ### API

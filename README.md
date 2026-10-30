@@ -79,10 +79,11 @@ This writes the definition of every symbol in `game.js` to `game.json`, in its c
 
 | Option | Effect |
 |---|---|
-| `--out <file>` | Where to write the JSON. Without it, the JSON goes to standard output |
-| `--pretty` | Indents the JSON so that it is easier to read |
-| `--expanded` | Writes the expanded form (every value as it is) instead of the compact one |
-| `--force` | Writes the JSON even when the content uses features the converter does not support |
+| `-o, --out <file>` | Where to write the JSON. Without it, the JSON goes to standard output |
+| `-p, --pretty` | Indents the JSON so that it is easier to read |
+| `-e, --expanded` | Writes the expanded form (every value as it is) instead of the compact one |
+| `-f, --force` | Writes the JSON even when the content uses features the converter does not support |
+| `-h, --help` | Shows the usage |
 
 Exit codes: `0` when the definition was written, `1` when the content uses unsupported features
 (each one is listed, and nothing is written unless `--force` is given), `2` when the files cannot be read
