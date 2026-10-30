@@ -39,7 +39,7 @@ for you. Use this package to get the data itself:
 3. **Extract.**
 
    ```
-   npx animate-data-converter game.js --out game.json --pretty
+   npx --no-install @tawaship/animate-data-converter game.js --out game.json --pretty
    ```
 
    `game.json` holds the definition of every symbol of `game.js`. When the content uses something the converter
@@ -71,8 +71,14 @@ it runs the published code in (QuickJS, through `quickjs-emscripten-core`); you 
 Use the command line tool to turn a published file into a JSON file:
 
 ```
-npx animate-data-converter game.js --out game.json
+npx --no-install @tawaship/animate-data-converter game.js --out game.json
 ```
+
+`--no-install` runs only the copy installed in your project: without it, `npx` would download and run a package from the npm registry when the command is not installed. In the `scripts` of your `package.json`, the command name alone is enough (`animate-data-converter game.js -o game.json`): npm runs scripts with the commands installed in the project and downloads nothing.
+
+To keep `npx` from downloading anything in your project at all (also when `--no-install` is forgotten), put
+`yes=false` in the project's `.npmrc`. `npx` then stops with an error when a command is not installed, instead
+of asking or, where nobody can answer (CI, scripts), downloading it without asking.
 
 This writes the definition of every symbol in `game.js` to `game.json`, in its compact form (see
 [The compact and the expanded form](#the-compact-and-the-expanded-form)).

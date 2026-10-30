@@ -17,7 +17,7 @@ The content is assumed to be published by **Adobe Animate 24.0.15** for HTML5 Ca
 
 - It runs in **Node.js 18 or later only**, at development time. Never suggest running it in the browser
 - It reads only the published JavaScript. Images and sounds are not read, and CreateJS 1.0.0 comes with the package
-- Most users do not call it directly: `@tawaship/pixi-animate-runtime`'s generator (`npx pixi-animate-runtime`) runs it. Use the converter directly only to keep definitions as files, to inspect them, or to build a player of your own
+- Most users do not call it directly: `@tawaship/pixi-animate-runtime`'s generator (`npx --no-install @tawaship/pixi-animate-runtime`) runs it. Use the converter directly only to keep definitions as files, to inspect them, or to build a player of your own
 
 ## Type definition files
 
@@ -37,7 +37,7 @@ The content is assumed to be published by **Adobe Animate 24.0.15** for HTML5 Ca
 ### Command line
 
 ```sh
-npx animate-data-converter game.js --out game.json --pretty
+npx --no-install @tawaship/animate-data-converter game.js --out game.json --pretty
 ```
 
 - `-o, --out <file>`: where to write (standard output without it). `-p, --pretty`: indented JSON. `-e, --expanded`: the expanded form instead of the compact one. `-f, --force`: write even with unsupported features. `-h, --help`: the usage
