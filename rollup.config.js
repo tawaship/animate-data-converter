@@ -44,12 +44,31 @@ export default (async () => {
 					sourcemap: true
 				}
 			],
-			external: ['fs', 'path', 'vm'],
+			external: ['fs', 'path', 'quickjs-emscripten-core', '@jitl/quickjs-wasmfile-release-sync'],
 			watch: {
 				clearScreen: false
 			},
 			plugins: [
 				typescript(),
+				versions({ __PACKAGE_VERSION__: version })
+			]
+		},
+		// What runs inside the sandbox: a plain script that defines AnimateDataConverterInside (no imports, nothing of Node)
+		{
+			input: 'src/inside.ts',
+			output: [
+				{
+					banner,
+					file: 'dist/animate-data-converter.inside.js',
+					format: 'iife',
+					name: 'AnimateDataConverterInside'
+				}
+			],
+			watch: {
+				clearScreen: false
+			},
+			plugins: [
+				typescript({ declaration: false, declarationMap: false }),
 				versions({ __PACKAGE_VERSION__: version })
 			]
 		}

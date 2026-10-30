@@ -13,5 +13,8 @@ import { IDefinition } from './types';
  * `ssMetadata`), the template's createjs.Stage subclass, and MovieClip-derived
  * helper classes that never initialize a timeline of their own (such as the
  * `AnMovieClip` base class newer Animate versions publish).
+ *
+ * The definition is returned in its compact form (each value written once;
+ * `expand` gives every value as it is).
  */
 export declare function extract(cjs: ICreatejs, source: IExtractSource): IDefinition;

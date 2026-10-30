@@ -9,7 +9,8 @@
 
 var fs = require('fs');
 var path = require('path');
-var vm = require('vm');
+var quickjsEmscriptenCore = require('quickjs-emscripten-core');
+var variant = require('@jitl/quickjs-wasmfile-release-sync');
 
 function _interopNamespaceDefault(e) {
     var n = Object.create(null);
@@ -30,7 +31,6 @@ function _interopNamespaceDefault(e) {
 
 var fs__namespace = /*#__PURE__*/_interopNamespaceDefault(fs);
 var path__namespace = /*#__PURE__*/_interopNamespaceDefault(path);
-var vm__namespace = /*#__PURE__*/_interopNamespaceDefault(vm);
 
 /**
  * The engine-independent definition extracted from published content.
@@ -60,6 +60,200 @@ const TEXT_KEYS = ['text', 'font', 'color', 'textAlign', 'textBaseline', 'lineHe
 
 /** The version of this package (written in from package.json when the package is built) */
 const VERSION = "0.1.0";
+
+/** The values of a slot's fields that a slot template leaves out */
+const SLOT_DEFAULTS = {
+    symbol: null, mode: null, startPosition: null, loop: null, graphics: null, sprite: null, bitmap: null, text: null,
+    mask: null, hitArea: null, filters: null, cache: null, button: null, filterCacheListener: false, parentSet: false
+};
+/** A table of values written once each, identical ones (compared by a key) sharing one index */
+class Table {
+    constructor() {
+        this.list = [];
+        this._indexes = new Map();
+    }
+    add(value, key) {
+        const known = this._indexes.get(key);
+        if (known !== undefined) {
+            return known;
+        }
+        this.list.push(value);
+        this._indexes.set(key, this.list.length - 1);
+        return this.list.length - 1;
+    }
+}
+/**
+ * Writes every value of an expanded definition once: drawings in one table for
+ * the content (identical ones merged, each command by the index of its kind),
+ * slots as templates and initial values, and each tween's distinct values with
+ * the index of the values of every position. Nothing is left out: `expand`
+ * gives the expanded definition back.
+ */
+function compact(definition) {
+    const graphics = new Table();
+    const templates = new Table();
+    const symbols = {};
+    Object.keys(definition.symbols).forEach(id => {
+        const symbol = definition.symbols[id];
+        symbols[id] = symbol.kind === 'movieclip' ? compactMovieClip(symbol, graphics, templates) : symbol;
+    });
+    const written = writtenGraphics(graphics.list);
+    return {
+        converterVersion: definition.converterVersion,
+        form: 'compact',
+        properties: definition.properties,
+        manifest: definition.manifest,
+        spriteSheets: definition.spriteSheets,
+        graphics: written.graphics,
+        commandKinds: written.commandKinds,
+        slotTemplates: templates.list,
+        symbols,
+        issues: definition.issues
+    };
+}
+function compactMovieClip(def, graphics, templates) {
+    return Object.assign({}, def, {
+        slots: def.slots.map((slot) => {
+            const template = slotTemplate(slot);
+            const index = templates.add(template, JSON.stringify(template));
+            return Object.keys(slot.init).length ? [index, slot.init] : index;
+        }),
+        graphics: def.graphics.map(g => graphics.add(g, JSON.stringify(g.commands))),
+        tweens: def.tweens.map(compactTween)
+    });
+}
+/** A slot's template: its kind and the fields not at their defaults, without its initial values */
+function slotTemplate(slot) {
+    const template = { kind: slot.kind };
+    Object.keys(SLOT_DEFAULTS).forEach(key => {
+        const value = Reflect.get(slot, key);
+        if (JSON.stringify(value) !== JSON.stringify(Reflect.get(SLOT_DEFAULTS, key))) {
+            Reflect.set(template, key, value);
+        }
+    });
+    return template;
+}
+/**
+ * A tween's distinct values and the index of every position's values. In a
+ * display list (the `state` prop), an entry that places a slot as it is (no
+ * props) is written as the slot's index.
+ */
+function compactTween(tween) {
+    const state = tween.props.indexOf('state');
+    const values = new Table();
+    const frames = tween.frames.map(frame => {
+        const row = frame.map((value, i) => {
+            if (i !== state || !Array.isArray(value)) {
+                return value;
+            }
+            return value.map(entry => entry.target.type === 'slot' && entry.props === null ? entry.target.slot : entry);
+        });
+        return values.add(row, JSON.stringify(row));
+    });
+    return Object.assign({}, tween, { values: values.list, frames });
+}
+/** The drawings with each command as the index of its kind (its type and the names of its props) and its props' values */
+function writtenGraphics(list) {
+    const kinds = new Table();
+    const graphics = list.map(def => ({
+        commands: def.commands.map(command => {
+            const names = Object.keys(command.props);
+            const index = kinds.add([command.type, names], JSON.stringify([command.type, names]));
+            const written = [index];
+            return written.concat(names.map(name => command.props[name]));
+        })
+    }));
+    return { graphics, commandKinds: kinds.list };
+}
+/**
+ * The expanded form of a definition: each slot whole, each tween's values at
+ * every position, and each symbol's drawings in the symbol. It is the
+ * definition `compact` was given, value for value.
+ */
+function expand(definition) {
+    const drawings = definition.graphics.map(g => ({ commands: commandsOf(definition.commandKinds, g) }));
+    const symbols = {};
+    Object.keys(definition.symbols).forEach(id => {
+        const symbol = definition.symbols[id];
+        symbols[id] = symbol.kind === 'movieclip' ? expandMovieClip(symbol, definition.slotTemplates, drawings) : symbol;
+    });
+    return {
+        converterVersion: definition.converterVersion,
+        form: 'expanded',
+        properties: definition.properties,
+        manifest: definition.manifest,
+        spriteSheets: definition.spriteSheets,
+        symbols,
+        issues: definition.issues
+    };
+}
+function expandMovieClip(def, templates, drawings) {
+    return Object.assign({}, def, {
+        slots: def.slots.map(ref => slotOf(templates, ref)),
+        graphics: def.graphics.map(index => drawings[index]),
+        tweens: def.tweens.map(expandTween)
+    });
+}
+/** A slot from its template (the fields it leaves out at their defaults) and its initial values */
+function slotOf(templates, ref) {
+    const t = templates[typeof ref === 'number' ? ref : ref[0]];
+    const d = SLOT_DEFAULTS;
+    return {
+        kind: t.kind,
+        symbol: t.symbol !== undefined ? t.symbol : d.symbol,
+        init: typeof ref === 'number' ? {} : ref[1],
+        mode: t.mode !== undefined ? t.mode : d.mode,
+        startPosition: t.startPosition !== undefined ? t.startPosition : d.startPosition,
+        loop: t.loop !== undefined ? t.loop : d.loop,
+        graphics: t.graphics !== undefined ? t.graphics : d.graphics,
+        sprite: t.sprite !== undefined ? t.sprite : d.sprite,
+        bitmap: t.bitmap !== undefined ? t.bitmap : d.bitmap,
+        text: t.text !== undefined ? t.text : d.text,
+        mask: t.mask !== undefined ? t.mask : d.mask,
+        hitArea: t.hitArea !== undefined ? t.hitArea : d.hitArea,
+        filters: t.filters !== undefined ? t.filters : d.filters,
+        cache: t.cache !== undefined ? t.cache : d.cache,
+        button: t.button !== undefined ? t.button : d.button,
+        filterCacheListener: t.filterCacheListener !== undefined ? t.filterCacheListener : d.filterCacheListener,
+        parentSet: t.parentSet !== undefined ? t.parentSet : d.parentSet
+    };
+}
+/** A tween with the values of every position, its display list entries whole */
+function expandTween(tween) {
+    const state = tween.props.indexOf('state');
+    const values = tween.values.map(row => row.map((value, i) => {
+        if (i === state && Array.isArray(value)) {
+            return value.map(stateEntryOf);
+        }
+        return isFrameValue(value) ? value : null;
+    }));
+    return {
+        target: tween.target,
+        duration: tween.duration,
+        props: tween.props,
+        frames: tween.frames.map(index => values[index]),
+        keyframes: tween.keyframes,
+        actions: tween.actions
+    };
+}
+function stateEntryOf(entry) {
+    return typeof entry === 'number' ? { target: { type: 'slot', slot: entry }, props: null } : entry;
+}
+/** Whether a written value is a frame value as it is (all but a display list with slot indexes) */
+function isFrameValue(value) {
+    return !Array.isArray(value) || value.every(entry => typeof entry !== 'number');
+}
+/** A drawing's commands from their written form */
+function commandsOf(kinds, graphics) {
+    return graphics.commands.map(command => {
+        const kind = kinds[typeof command[0] === 'number' ? command[0] : 0];
+        const props = {};
+        kind[1].forEach((name, i) => {
+            props[name] = command[i + 1];
+        });
+        return { type: kind[0], props };
+    });
+}
 
 /**
  * Properties a tween writes that carry no display state, left out of the
@@ -106,6 +300,9 @@ const BUTTON_EVENTS = ['rollover', 'rollout', 'mousedown', 'pressup'];
  * `ssMetadata`), the template's createjs.Stage subclass, and MovieClip-derived
  * helper classes that never initialize a timeline of their own (such as the
  * `AnMovieClip` base class newer Animate versions publish).
+ *
+ * The definition is returned in its compact form (each value written once;
+ * `expand` gives every value as it is).
  */
 function extract(cjs, source) {
     const lib = source.lib;
@@ -121,6 +318,7 @@ function extract(cjs, source) {
         frameImages: new Map(),
         definition: {
             converterVersion: VERSION,
+            form: 'expanded',
             properties: readProperties(properties),
             manifest: [],
             spriteSheets: [],
@@ -136,7 +334,7 @@ function extract(cjs, source) {
         const command = cjs.Graphics[name];
         if (typeof command === 'function') {
             const prototype = command.prototype;
-            if (isPropBag$1(prototype)) {
+            if (isPropBag(prototype)) {
                 ctx.commandTypes.set(prototype, name);
             }
         }
@@ -146,7 +344,7 @@ function extract(cjs, source) {
         const value = lib[id];
         if (isLibraryClass(cjs, value)) {
             const prototype = value.prototype;
-            if (isPropBag$1(prototype) && !ctx.ids.has(prototype)) {
+            if (isPropBag(prototype) && !ctx.ids.has(prototype)) {
                 ctx.ids.set(prototype, id);
                 classes.push({ id, ctor: value });
                 ctx.classes.set(id, value);
@@ -172,10 +370,10 @@ function extract(cjs, source) {
     finally {
         utils.extractFrame = extractFrame;
     }
-    return ctx.definition;
+    return compact(ctx.definition);
 }
 function recordFrameImage(ctx, image, spriteSheet, frame) {
-    if (!isPropBag$1(image)) {
+    if (!isPropBag(image)) {
         return;
     }
     const sheet = keyOf(ctx.source.spriteSheets, spriteSheet);
@@ -246,21 +444,21 @@ function defineLibraryClass(ctx, id, ctor) {
 function isPrimitive(value) {
     return value === null || (typeof value !== 'object' && typeof value !== 'function');
 }
-function isPropBag$1(value) {
+function isPropBag(value) {
     return !isPrimitive(value);
 }
 function isNumber(value) {
     return typeof value === 'number';
 }
 function isDisplayObject(ctx, value) {
-    return isPropBag$1(value) && value instanceof ctx.cjs.DisplayObject;
+    return isPropBag(value) && value instanceof ctx.cjs.DisplayObject;
 }
 function isLibraryClass(cjs, value) {
     if (typeof value !== 'function') {
         return false;
     }
     const prototype = value.prototype;
-    return isPropBag$1(prototype) && prototype instanceof cjs.DisplayObject && !(prototype instanceof cjs.Stage);
+    return isPropBag(prototype) && prototype instanceof cjs.DisplayObject && !(prototype instanceof cjs.Stage);
 }
 function issue(ctx, symbol, slot, message) {
     ctx.definition.issues.push({ symbol, slot, message });
@@ -289,7 +487,7 @@ function getBaseKeys(ctx) {
 }
 function readProperties(value) {
     const properties = {};
-    if (isPropBag$1(value)) {
+    if (isPropBag(value)) {
         Object.keys(value).forEach(key => {
             const v = value[key];
             if (isPrimitive(v) && v !== undefined) {
@@ -301,10 +499,10 @@ function readProperties(value) {
 }
 function readManifest(ctx, properties) {
     const manifest = [];
-    const list = isPropBag$1(properties) ? properties.manifest : undefined;
+    const list = isPropBag(properties) ? properties.manifest : undefined;
     if (Array.isArray(list)) {
         list.forEach((entry) => {
-            if (isPropBag$1(entry) && typeof entry.id === 'string' && typeof entry.src === 'string') {
+            if (isPropBag(entry) && typeof entry.id === 'string' && typeof entry.src === 'string') {
                 manifest.push({ id: entry.id, src: entry.src });
             }
             else {
@@ -318,7 +516,7 @@ function readSpriteSheets(ctx, value) {
     const sheets = [];
     if (Array.isArray(value)) {
         value.forEach((entry) => {
-            if (isPropBag$1(entry) && typeof entry.name === 'string' && Array.isArray(entry.frames)) {
+            if (isPropBag(entry) && typeof entry.name === 'string' && Array.isArray(entry.frames)) {
                 sheets.push({ name: entry.name, frames: entry.frames.map((frame) => toPlainData(ctx, '', frame)) });
             }
             else {
@@ -335,7 +533,7 @@ function toPlainData(ctx, symbol, value) {
     if (isPrimitive(value)) {
         return value === undefined ? null : value;
     }
-    if (!isPropBag$1(value)) {
+    if (!isPropBag(value)) {
         return null;
     }
     if (Array.isArray(value)) {
@@ -363,7 +561,7 @@ function readInit(obj) {
     return init;
 }
 function readRect(value) {
-    if (isPropBag$1(value) && isNumber(value.x) && isNumber(value.y) && isNumber(value.width) && isNumber(value.height)) {
+    if (isPropBag(value) && isNumber(value.x) && isNumber(value.y) && isNumber(value.width) && isNumber(value.height)) {
         return { x: value.x, y: value.y, width: value.width, height: value.height };
     }
     return null;
@@ -406,7 +604,7 @@ function readText(obj) {
     return text;
 }
 function readCache(value) {
-    if (isPropBag$1(value) && isNumber(value.x) && isNumber(value.y) && isNumber(value.width) && isNumber(value.height) && isNumber(value.scale)) {
+    if (isPropBag(value) && isNumber(value.x) && isNumber(value.y) && isNumber(value.width) && isNumber(value.height) && isNumber(value.scale)) {
         return { x: value.x, y: value.y, width: value.width, height: value.height, scale: value.scale };
     }
     return null;
@@ -419,7 +617,7 @@ function readGraphics(ctx, symbol, graphics) {
         return { commands };
     }
     instructions.forEach((instruction) => {
-        if (!isPropBag$1(instruction)) {
+        if (!isPropBag(instruction)) {
             issue(ctx, symbol, null, 'malformed graphics instruction');
             return;
         }
@@ -447,7 +645,7 @@ function toCommandValue(ctx, symbol, value) {
     if (isPrimitive(value)) {
         return value === undefined ? null : value;
     }
-    if (!isPropBag$1(value)) {
+    if (!isPropBag(value)) {
         return null;
     }
     if (Array.isArray(value)) {
@@ -455,7 +653,7 @@ function toCommandValue(ctx, symbol, value) {
     }
     // Gradient and bitmap fill styles keep the arguments they were created with in `props`
     const props = value.props;
-    if (isPropBag$1(props)) {
+    if (isPropBag(props)) {
         const map = {};
         Object.keys(props).forEach(key => {
             map[key] = toCommandValue(ctx, symbol, props[key]);
@@ -538,7 +736,7 @@ function defineMovieClip(ctx, mc) {
             if (value === mc) {
                 return { type: 'self' };
             }
-            if (isPropBag$1(value)) {
+            if (isPropBag(value)) {
                 const owner = filterOwners.get(value);
                 if (owner) {
                     return { type: 'filter', slot: owner.slot, filter: owner.filter };
@@ -550,7 +748,7 @@ function defineMovieClip(ctx, mc) {
             return null;
         },
         graphicsOf(value) {
-            if (!isPropBag$1(value) || !(value instanceof ctx.cjs.Graphics)) {
+            if (!isPropBag(value) || !(value instanceof ctx.cjs.Graphics)) {
                 return null;
             }
             const known = graphicsIndex.get(value);
@@ -605,7 +803,7 @@ function defineMovieClip(ctx, mc) {
     slotObjects.forEach((obj, slot) => {
         if (obj.filters) {
             obj.filters.forEach((filter, index) => {
-                if (isPropBag$1(filter)) {
+                if (isPropBag(filter)) {
                     filterOwners.set(filter, { slot, filter: index });
                 }
             });
@@ -646,7 +844,7 @@ function defineMovieClip(ctx, mc) {
 }
 function hasListeners(obj) {
     const listeners = obj._listeners;
-    if (!isPropBag$1(listeners)) {
+    if (!isPropBag(listeners)) {
         return false;
     }
     return Object.keys(listeners).some(type => {
@@ -753,7 +951,7 @@ function readFilters(ctx, symbol, slot, obj) {
     }
     const filters = [];
     obj.filters.forEach(filter => {
-        if (isPropBag$1(filter) && filter instanceof ctx.cjs.ColorFilter) {
+        if (isPropBag(filter) && filter instanceof ctx.cjs.ColorFilter) {
             const props = {};
             COLOR_FILTER_KEYS.forEach(key => {
                 const value = filter[key];
@@ -771,7 +969,7 @@ function readFilters(ctx, symbol, slot, obj) {
 }
 function readListeners(ctx, scope, index, obj, slot) {
     const listeners = obj._listeners;
-    if (!isPropBag$1(listeners)) {
+    if (!isPropBag(listeners)) {
         return;
     }
     Object.keys(listeners).forEach(type => {
@@ -780,7 +978,7 @@ function readListeners(ctx, scope, index, obj, slot) {
             return;
         }
         list.forEach((listener) => {
-            if (BUTTON_EVENTS.indexOf(type) >= 0 && isPropBag$1(listener) && listener instanceof ctx.cjs.ButtonHelper) {
+            if (BUTTON_EVENTS.indexOf(type) >= 0 && isPropBag(listener) && listener instanceof ctx.cjs.ButtonHelper) {
                 if (!slot.button) {
                     const hit = obj.hitArea;
                     slot.button = {
@@ -813,8 +1011,8 @@ function readFilterCacheList(ctx, scope, index, obj) {
         return entries;
     }
     list.forEach((entry) => {
-        const instance = isPropBag$1(entry) ? scope.targetOf(entry.instance) : null;
-        if (isPropBag$1(entry) && instance && isNumber(entry.startFrame) && isNumber(entry.endFrame)
+        const instance = isPropBag(entry) ? scope.targetOf(entry.instance) : null;
+        if (isPropBag(entry) && instance && isNumber(entry.startFrame) && isNumber(entry.endFrame)
             && isNumber(entry.x) && isNumber(entry.y) && isNumber(entry.w) && isNumber(entry.h)) {
             entries.push({
                 instance,
@@ -952,7 +1150,7 @@ function toStateValue(ctx, scope, value) {
     const entries = [];
     scope.stateMemo.set(value, entries);
     value.forEach(entry => {
-        if (!isPropBag$1(entry)) {
+        if (!isPropBag(entry)) {
             issue(ctx, scope.symbol, null, 'malformed state entry');
             return;
         }
@@ -963,7 +1161,7 @@ function toStateValue(ctx, scope, value) {
         }
         let props = null;
         const source = entry.p;
-        if (isPropBag$1(source)) {
+        if (isPropBag(source)) {
             const map = {};
             Object.keys(source).forEach(key => {
                 const v = source[key];
@@ -982,274 +1180,141 @@ function toStateValue(ctx, scope, value) {
     return entries;
 }
 
-/**
- * The minimal browser environment createjs and the published code need to
- * run in a Node vm context. Nothing is drawn and nothing is loaded:
- *
- * - A canvas has a 2D context whose drawing calls do nothing. toDataURL()
- *   names what was last drawn on it (the source image and the rectangles),
- *   so that every image made from a canvas has a src of its own
- * - An <img> counts as loaded as soon as its src is set, and assigning
- *   `onload` afterwards calls the handler at once. Published code sets some
- *   graphics in an image's onload (bitmap fills drawn from a sprite sheet
- *   frame); in a browser the handler runs a moment after construction, here it
- *   runs during construction, so the state read is the one after loading
- * - Timers never fire and time does not pass: the content is constructed, not
- *   played
- */
-function noop() {
-    // Nothing to do in a headless environment
-}
-function isHandler(value) {
-    return typeof value === 'function';
-}
-function createContext2D(canvas, drawn) {
-    const context = {
-        canvas,
-        globalCompositeOperation: 'source-over',
-        globalAlpha: 1,
-        measureText: () => ({ width: 0 }),
-        getImageData: () => ({ data: [0, 0, 0, 0] }),
-        createImageData: () => ({ data: [0, 0, 0, 0] }),
-        createLinearGradient: () => ({ addColorStop: noop }),
-        createRadialGradient: () => ({ addColorStop: noop }),
-        createPattern: () => ({}),
-        isPointInPath: () => false,
-        drawImage: (image, ...rest) => {
-            const src = image !== null && typeof image === 'object' && 'src' in image ? String(image.src) : '';
-            drawn.last = src + ':' + rest.join(',');
-        }
-    };
-    [
-        'save', 'restore', 'setTransform', 'transform', 'translate', 'scale', 'rotate', 'clearRect', 'fillRect',
-        'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arcTo', 'arc', 'quadraticCurveTo',
-        'bezierCurveTo', 'rect', 'fill', 'stroke', 'clip', 'fillText', 'strokeText', 'putImageData'
-    ].forEach(name => {
-        context[name] = noop;
+/******************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+/* global Reflect, Promise, SuppressedError, Symbol, Iterator */
+
+
+function __awaiter(thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
-    return context;
-}
-function createCanvas() {
-    const drawn = { last: '' };
-    const canvas = {
-        width: 0,
-        height: 0,
-        style: {},
-        addEventListener: noop,
-        removeEventListener: noop,
-        toDataURL: () => 'canvas:' + drawn.last
-    };
-    const context = createContext2D(canvas, drawn);
-    canvas.getContext = () => context;
-    return canvas;
-}
-function createImage() {
-    let src = '';
-    let onload = null;
-    const image = {
-        style: {},
-        width: 0,
-        height: 0,
-        naturalWidth: 0,
-        naturalHeight: 0,
-        complete: false,
-        addEventListener: noop,
-        removeEventListener: noop
-    };
-    Object.defineProperty(image, 'src', {
-        enumerable: true,
-        get: () => src,
-        set: (value) => {
-            src = String(value);
-            image.width = image.height = image.naturalWidth = image.naturalHeight = 1;
-            image.complete = true;
-        }
-    });
-    Object.defineProperty(image, 'onload', {
-        enumerable: true,
-        get: () => onload,
-        set: (handler) => {
-            onload = handler;
-            if (image.complete && isHandler(handler)) {
-                handler.call(image, {});
-            }
-        }
-    });
-    return image;
-}
-function createElement(tag) {
-    if (tag === 'canvas') {
-        return createCanvas();
-    }
-    if (tag === 'img') {
-        return createImage();
-    }
-    return {
-        style: {},
-        addEventListener: noop,
-        removeEventListener: noop,
-        appendChild: noop,
-        removeChild: noop,
-        setAttribute: noop,
-        canPlayType: () => ''
-    };
-}
-/**
- * The globals of a fresh vm context. The context's own global object is made
- * `window` / `self` after the context is created, so that built-ins such as
- * String and JSON are reachable through `window` as in a browser.
- */
-function createSandbox(console) {
-    return {
-        document: {
-            createElement,
-            addEventListener: noop,
-            removeEventListener: noop,
-            getElementsByTagName: () => [],
-            documentElement: { style: {} },
-            body: { appendChild: noop, removeChild: noop, style: {} }
-        },
-        navigator: { userAgent: 'animate-data-converter', platform: 'headless', maxTouchPoints: 0 },
-        performance: { now: () => 0 },
-        console,
-        addEventListener: noop,
-        removeEventListener: noop,
-        setTimeout: () => 0,
-        clearTimeout: noop,
-        setInterval: () => 0,
-        clearInterval: noop,
-        requestAnimationFrame: () => 0,
-        cancelAnimationFrame: noop
-    };
-}
-/**
- * A stand-in for an image the HTML template would load from the manifest
- * (`src` is the manifest entry's path, nothing is fetched).
- */
-function createLoadedImage(src) {
-    const image = createImage();
-    image.src = src;
-    return image;
 }
 
-const SILENT_CONSOLE = {
-    log() { },
-    info() { },
-    debug() { },
-    warn() { },
-    error() { }
+typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
+    var e = new Error(message);
+    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 };
+
 /**
  * The createjs runtime: the CreateJS 1.0.0 combined build Animate publishes
- * for, as @tawaship/createjs-module exports it. Its code refers to the browser
- * globals (window, document) as soon as it runs, so it is not required into
- * Node but run inside each vm context, as a CommonJS module, from its source.
+ * for, as @tawaship/createjs-module exports it (CommonJS module source, run
+ * inside the sandbox).
  */
 const CREATEJS_MODULE = '@tawaship/createjs-module';
-let createjsScript = null;
-function getCreatejsScript() {
-    if (!createjsScript) {
-        const file = require.resolve(CREATEJS_MODULE);
-        const source = fs__namespace.readFileSync(file, 'utf8');
-        createjsScript = new vm__namespace.Script('(function (module, exports) {' + source + '\n})', { filename: path__namespace.basename(file) });
+/** The script run inside the sandbox (inside.ts, built next to this bundle) */
+const INSIDE_FILE = 'animate-data-converter.inside.js';
+/** How long the published code may run, in milliseconds, before it is stopped */
+const TIME_LIMIT = 60000;
+/** How much memory the sandbox may use, in bytes */
+const MEMORY_LIMIT = 1024 * 1024 * 1024;
+let quickjs = null;
+let sources = null;
+function getQuickJS() {
+    if (!quickjs) {
+        quickjs = quickjsEmscriptenCore.newQuickJSWASMModuleFromVariant(variant);
     }
-    return createjsScript;
+    return quickjs;
 }
-function isPropBag(value) {
-    return value !== null && (typeof value === 'object' || typeof value === 'function');
+function getSources() {
+    if (!sources) {
+        sources = {
+            createjs: fs__namespace.readFileSync(require.resolve(CREATEJS_MODULE), 'utf8'),
+            inside: fs__namespace.readFileSync(path__namespace.join(__dirname, INSIDE_FILE), 'utf8')
+        };
+    }
+    return sources;
 }
-function isCreatejs(value) {
-    return isPropBag(value) && ['DisplayObject', 'MovieClip', 'Shape', 'Sprite', 'Bitmap', 'Text', 'Stage', 'Graphics', 'ColorFilter', 'ButtonHelper']
-        .every(name => typeof value[name] === 'function') && isPropBag(value.SpriteSheetUtils);
+/** Runs code in the sandbox; its result as a string, or the error it threw */
+function evaluate(context, code, filename) {
+    const result = context.evalCode(code, filename);
+    if (result.error) {
+        const message = context.getProp(result.error, 'message');
+        const raw = context.typeof(message) === 'string' ? context.getString(message) : 'unknown error';
+        // QuickJS stops the code when the interrupt handler (the time limit) says so
+        const text = raw === 'interrupted' ? 'the published code ran longer than ' + TIME_LIMIT / 1000 + ' seconds and was stopped' : raw;
+        message.dispose();
+        result.error.dispose();
+        throw new Error(text);
+    }
+    const text = context.typeof(result.value) === 'string' ? context.getString(result.value) : '';
+    result.value.dispose();
+    return text;
 }
-function call(owner, name, ...args) {
-    const method = owner[name];
-    if (typeof method !== 'function') {
-        throw new Error('"' + name + '" is not a function');
-    }
-    return method.apply(owner, args);
+/** Whether data read back from the sandbox is a definition (in its compact form) */
+function isDefinition(value) {
+    return value !== null && Reflect.get(value, 'form') === 'compact' && typeof Reflect.get(value, 'converterVersion') === 'string'
+        && Reflect.get(value, 'symbols') !== null && typeof Reflect.get(value, 'symbols') === 'object' && Array.isArray(Reflect.get(value, 'issues'));
 }
-/**
- * Runs createjs (CreateJS 1.0.0, see CREATEJS_MODULE) and the published code
- * in a fresh vm context and wires up the
- * assets the way the HTML template does, without loading anything: every
- * manifest entry gets a stand-in image (its `src` is the entry's path), and
- * every sprite sheet of `lib.ssMetadata` is built over the manifest image of
- * the same id. MotionGuidePlugin is installed, as the template does for
- * content with motion guides.
- */
-function loadPublished(options) {
-    const sandbox = createSandbox(options.console ? options.console : SILENT_CONSOLE);
-    const context = vm__namespace.createContext(sandbox);
-    const global = vm__namespace.runInContext('this', context);
-    if (!isPropBag(global)) {
-        throw new Error('the vm context has no global object');
+/** The definition from the sandbox's result (`{ ok: true, definition }` or `{ ok: false, message }`, as JSON) */
+function definitionOf(json) {
+    const result = JSON.parse(json);
+    if (result === null || typeof result !== 'object') {
+        throw new Error('the sandbox gave no result');
     }
-    global.window = global;
-    global.self = global;
-    // The published code reaches createjs through the global `createjs`
-    const createjsModule = { exports: {} };
-    const runModule = getCreatejsScript().runInContext(context);
-    if (typeof runModule !== 'function') {
-        throw new Error('could not run ' + CREATEJS_MODULE);
+    if (Reflect.get(result, 'ok') !== true) {
+        const message = Reflect.get(result, 'message');
+        throw new Error(typeof message === 'string' ? message : 'the extraction failed');
     }
-    runModule.call(global, createjsModule, createjsModule.exports);
-    const cjs = createjsModule.exports;
-    if (!isCreatejs(cjs)) {
-        throw new Error(CREATEJS_MODULE + ' did not export a createjs namespace with the expected classes');
+    const definition = Reflect.get(result, 'definition');
+    if (!isDefinition(definition)) {
+        throw new Error('the sandbox gave no definition');
     }
-    global.createjs = cjs;
-    const plugin = cjs.MotionGuidePlugin;
-    if (isPropBag(plugin) && typeof plugin.install === 'function') {
-        call(plugin, 'install');
-    }
-    vm__namespace.runInContext(options.published, context, { filename: options.publishedFilename || 'published.js' });
-    const adobeAn = global.AdobeAn;
-    const compositions = isPropBag(adobeAn) ? adobeAn.compositions : undefined;
-    if (!isPropBag(adobeAn) || !isPropBag(compositions)) {
-        throw new Error('the published code registered no composition (AdobeAn.compositions); is it Animate HTML5 Canvas output?');
-    }
-    const ids = Object.keys(compositions);
-    const composition = compositions[ids[ids.length - 1]];
-    if (!isPropBag(composition)) {
-        throw new Error('malformed composition');
-    }
-    const lib = call(composition, 'getLibrary');
-    const spriteSheets = call(composition, 'getSpriteSheet');
-    const images = call(composition, 'getImages');
-    if (!isPropBag(lib) || !isPropBag(spriteSheets) || !isPropBag(images)) {
-        throw new Error('the composition did not provide its library, sprite sheets and images');
-    }
-    const properties = lib.properties;
-    const manifest = isPropBag(properties) ? properties.manifest : undefined;
-    if (Array.isArray(manifest)) {
-        manifest.forEach((entry) => {
-            if (isPropBag(entry) && typeof entry.id === 'string' && typeof entry.src === 'string' && images[entry.id] === undefined) {
-                images[entry.id] = createLoadedImage(entry.src);
-            }
-        });
-    }
-    const ssMetadata = lib.ssMetadata;
-    if (Array.isArray(ssMetadata)) {
-        const SpriteSheet = cjs.SpriteSheet;
-        ssMetadata.forEach((meta) => {
-            if (isPropBag(meta) && typeof meta.name === 'string' && typeof SpriteSheet === 'function') {
-                const image = images[meta.name];
-                if (image === undefined) {
-                    throw new Error('sprite sheet "' + meta.name + '" has no image in the manifest');
-                }
-                spriteSheets[meta.name] = Reflect.construct(SpriteSheet, [{ images: [image], frames: meta.frames }]);
-            }
-        });
-    }
-    return { createjs: cjs, source: { lib, spriteSheets, images, adobeAn } };
+    return definition;
 }
 /**
- * Loads published content (see loadPublished) and extracts its definition.
+ * Extracts the definition of published content. createjs and the published
+ * code (frame scripts included) run in a sandbox: QuickJS, a separate
+ * JavaScript engine compiled to WebAssembly, which is given nothing of the
+ * host (no files, no commands, no network, no function of Node). Only the
+ * sources go in and the definition comes out, as text. The published code is
+ * stopped when it runs longer than a minute or uses more than 1 GB.
  */
 function extractPublished(options) {
-    const content = loadPublished(options);
-    return extract(content.createjs, content.source);
+    return __awaiter(this, void 0, void 0, function* () {
+        const QuickJS = yield getQuickJS();
+        const code = getSources();
+        const runtime = QuickJS.newRuntime();
+        try {
+            runtime.setMemoryLimit(MEMORY_LIMIT);
+            runtime.setMaxStackSize(0);
+            runtime.setInterruptHandler(quickjsEmscriptenCore.shouldInterruptAfterDeadline(Date.now() + TIME_LIMIT));
+            const context = runtime.newContext();
+            try {
+                evaluate(context, code.inside, INSIDE_FILE);
+                const pass = (name, value) => {
+                    const handle = context.newString(value);
+                    context.setProp(context.global, name, handle);
+                    handle.dispose();
+                };
+                pass('__createjs', code.createjs);
+                pass('__published', options.published);
+                return definitionOf(evaluate(context, 'AnimateDataConverterInside.extractInside(__createjs, __published)', options.publishedFilename || 'published.js'));
+            }
+            finally {
+                context.dispose();
+            }
+        }
+        finally {
+            runtime.dispose();
+        }
+    });
 }
 /**
  * extractPublished() with the published JS read from a file.
@@ -1262,15 +1327,16 @@ function extractPublishedFile(publishedPath) {
 }
 
 const USAGE = [
-    'Usage: animate-data-converter <published.js> [--out <file.json>] [--pretty] [--force]',
+    'Usage: animate-data-converter <published.js> [--out <file.json>] [--pretty] [--expanded] [--force]',
     '',
     '  <published.js>          the JavaScript file Animate published for HTML5 Canvas',
     '  --out <file>            where to write the definition (standard output when omitted)',
     '  --pretty                indent the JSON',
+    '  --expanded              write the expanded definition (every value as it is) instead of the compact one',
     '  --force                 write the definition even when the content uses unsupported features'
 ].join('\n');
 function parseArgs(args) {
-    const parsed = { published: null, out: null, pretty: false, force: false };
+    const parsed = { published: null, out: null, pretty: false, expanded: false, force: false };
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === '--out') {
@@ -1282,6 +1348,9 @@ function parseArgs(args) {
         }
         else if (arg === '--pretty') {
             parsed.pretty = true;
+        }
+        else if (arg === '--expanded') {
+            parsed.expanded = true;
         }
         else if (arg === '--force') {
             parsed.force = true;
@@ -1305,42 +1374,46 @@ function parseArgs(args) {
  * usage and loading errors.
  */
 function runCli(args, io) {
-    const parsed = parseArgs(args);
-    if (typeof parsed === 'string') {
-        io.stderr(parsed + '\n\n' + USAGE + '\n');
-        return 2;
-    }
-    let definition;
-    try {
-        definition = extractPublishedFile(parsed.published || '');
-    }
-    catch (e) {
-        io.stderr('could not load ' + parsed.published + ': ' + (e instanceof Error ? e.message : String(e)) + '\n');
-        return 2;
-    }
-    definition.issues.forEach(issue => {
-        io.stderr('unsupported: ' + (issue.symbol ? issue.symbol : '(content)') + (issue.slot !== null ? ' slot ' + issue.slot : '') + ': ' + issue.message + '\n');
+    return __awaiter(this, void 0, void 0, function* () {
+        const parsed = parseArgs(args);
+        if (typeof parsed === 'string') {
+            io.stderr(parsed + '\n\n' + USAGE + '\n');
+            return 2;
+        }
+        let definition;
+        try {
+            definition = yield extractPublishedFile(parsed.published || '');
+        }
+        catch (e) {
+            io.stderr('could not load ' + parsed.published + ': ' + (e instanceof Error ? e.message : String(e)) + '\n');
+            return 2;
+        }
+        definition.issues.forEach(issue => {
+            io.stderr('unsupported: ' + (issue.symbol ? issue.symbol : '(content)') + (issue.slot !== null ? ' slot ' + issue.slot : '') + ': ' + issue.message + '\n');
+        });
+        if (definition.issues.length && !parsed.force) {
+            io.stderr(definition.issues.length + ' unsupported feature(s); nothing written (use --force to write anyway)\n');
+            return 1;
+        }
+        const json = JSON.stringify(parsed.expanded ? expand(definition) : definition, null, parsed.pretty ? '\t' : undefined) + '\n';
+        if (parsed.out) {
+            fs__namespace.writeFileSync(parsed.out, json);
+        }
+        else {
+            io.stdout(json);
+        }
+        return definition.issues.length ? 1 : 0;
     });
-    if (definition.issues.length && !parsed.force) {
-        io.stderr(definition.issues.length + ' unsupported feature(s); nothing written (use --force to write anyway)\n');
-        return 1;
-    }
-    const json = JSON.stringify(definition, null, parsed.pretty ? '\t' : undefined) + '\n';
-    if (parsed.out) {
-        fs__namespace.writeFileSync(parsed.out, json);
-    }
-    else {
-        io.stdout(json);
-    }
-    return definition.issues.length ? 1 : 0;
 }
 
 exports.INIT_KEYS = INIT_KEYS;
+exports.SLOT_DEFAULTS = SLOT_DEFAULTS;
 exports.TEXT_KEYS = TEXT_KEYS;
 exports.VERSION = VERSION;
+exports.compact = compact;
+exports.expand = expand;
 exports.extract = extract;
 exports.extractPublished = extractPublished;
 exports.extractPublishedFile = extractPublishedFile;
-exports.loadPublished = loadPublished;
 exports.runCli = runCli;
 //# sourceMappingURL=animate-data-converter.cjs.js.map

@@ -8,4 +8,4 @@ export interface ICliIO {
  * (they are listed, and nothing is written unless --force is given), 2 for
  * usage and loading errors.
  */
-export declare function runCli(args: string[], io: ICliIO): number;
+export declare function runCli(args: string[], io: ICliIO): Promise<number>;

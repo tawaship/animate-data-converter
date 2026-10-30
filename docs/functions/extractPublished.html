@@ -13,17 +13,22 @@
 <section class="tsd-panel">
 <ul class="tsd-signatures">
 <li class="">
-<div class="tsd-signature tsd-anchor-link" id="extractpublished"><span class="tsd-kind-call-signature">extractPublished</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/ILoadOptions.html" class="tsd-signature-type tsd-kind-interface">ILoadOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/IDefinition.html" class="tsd-signature-type tsd-kind-interface">IDefinition</a><a href="#extractpublished" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
+<div class="tsd-signature tsd-anchor-link" id="extractpublished"><span class="tsd-kind-call-signature">extractPublished</span><span class="tsd-signature-symbol">(</span><span class="tsd-kind-parameter">options</span><span class="tsd-signature-symbol">:</span> <a href="../interfaces/ILoadOptions.html" class="tsd-signature-type tsd-kind-interface">ILoadOptions</a><span class="tsd-signature-symbol">)</span><span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/IDefinition.html" class="tsd-signature-type tsd-kind-interface">IDefinition</a><span class="tsd-signature-symbol">&gt;</span><a href="#extractpublished" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="../assets/icons.svg#icon-anchor"></use></svg></a></div>
 <div class="tsd-description">
-<div class="tsd-comment tsd-typography"><p>Loads published content (see loadPublished) and extracts its definition.</p>
+<div class="tsd-comment tsd-typography"><p>Extracts the definition of published content. createjs and the published
+code (frame scripts included) run in a sandbox: QuickJS, a separate
+JavaScript engine compiled to WebAssembly, which is given nothing of the
+host (no files, no commands, no network, no function of Node). Only the
+sources go in and the definition comes out, as text. The published code is
+stopped when it runs longer than a minute or uses more than 1 GB.</p>
 </div>
 <div class="tsd-parameters">
 <h4 class="tsd-parameters-title">Parameters</h4>
 <ul class="tsd-parameter-list">
 <li><span><span class="tsd-kind-parameter">options</span>: <a href="../interfaces/ILoadOptions.html" class="tsd-signature-type tsd-kind-interface">ILoadOptions</a></span></li></ul></div>
-<h4 class="tsd-returns-title">Returns <a href="../interfaces/IDefinition.html" class="tsd-signature-type tsd-kind-interface">IDefinition</a></h4><aside class="tsd-sources">
+<h4 class="tsd-returns-title">Returns <span class="tsd-signature-type">Promise</span><span class="tsd-signature-symbol">&lt;</span><a href="../interfaces/IDefinition.html" class="tsd-signature-type tsd-kind-interface">IDefinition</a><span class="tsd-signature-symbol">&gt;</span></h4><aside class="tsd-sources">
 <ul>
-<li>Defined in load.ts:156</li></ul></aside></div></li></ul></section></div>
+<li>Defined in load.ts:98</li></ul></aside></div></li></ul></section></div>
 <div class="col-sidebar">
 <div class="page-menu">
 <div class="tsd-navigation settings">

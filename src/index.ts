@@ -1,12 +1,14 @@
 export { extract } from './extract';
-export { loadPublished, extractPublished, extractPublishedFile } from './load';
-export type { ILoadOptions, ILoadedContent } from './load';
+export { compact, expand, SLOT_DEFAULTS } from './compact';
+export { extractPublished, extractPublishedFile } from './load';
+export type { ILoadOptions } from './load';
 export { runCli } from './cli';
 export type { ICliIO } from './cli';
 export { INIT_KEYS, TEXT_KEYS } from './types';
 export { VERSION } from './version';
 export type {
-	IDefinition, TSymbolDef, IMovieClipSymbolDef, ISpriteSymbolDef, IBitmapSymbolDef,
+	IDefinition, IExpandedDefinition, TCompactSymbolDef, ICompactMovieClipSymbolDef, ICompactTweenDef, TCompactFrameValue,
+	TSlotTemplateDef, TSlotRefDef, IGraphicsDataDef, TCommandDef, TCommandKindDef, TSymbolDef, IMovieClipSymbolDef, ISpriteSymbolDef, IBitmapSymbolDef,
 	IInstanceArgsDef, ISlotDef, IMemberDef, ILabelDef, ITweenDef, IActionDef,
 	IStateEntryDef, IGraphicsRefDef, IPropMapDef, IGraphicsDef, IGraphicsCommandDef,
 	ISpriteDef, IBitmapDef, IFilterDef, ICacheDef, IButtonDef, IFilterCacheEntryDef,

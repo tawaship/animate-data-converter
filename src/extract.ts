@@ -3,12 +3,13 @@ import {
 	ICjsSprite, ICjsSpriteSheet, ICjsBitmap, IExtractSource, IPropBag, TValue, TLibraryClass
 } from './createjs';
 import {
-	IDefinition, IMovieClipSymbolDef, ISlotDef, ITweenDef, IActionDef, IPropMapDef, IStateEntryDef,
+	IDefinition, IExpandedDefinition, IMovieClipSymbolDef, ISlotDef, ITweenDef, IActionDef, IPropMapDef, IStateEntryDef,
 	IGraphicsDef, IGraphicsCommandDef, ISpriteDef, IBitmapDef, IFilterDef, ICacheDef, IButtonDef,
 	IFilterCacheEntryDef, IRectDef, IDataMap, TDataValue, TFrameValue, TTargetDef,
 	ISpriteSheetDef, IManifestEntryDef, TSymbolDef, INIT_KEYS, TEXT_KEYS
 } from './types';
 import { VERSION } from './version';
+import { compact } from './compact';
 
 interface IContext {
 	cjs: ICreatejs;
@@ -29,7 +30,7 @@ interface IContext {
 	classes: Map<string, TLibraryClass>;
 	/** Images SpriteSheetUtils.extractFrame made during extraction, by the sheet and frame drawn */
 	frameImages: Map<object, { sheet: string; frame: number }>;
-	definition: IDefinition;
+	definition: IExpandedDefinition;
 	baseKeys: Set<string> | null;
 	counter: number;
 }
@@ -98,6 +99,9 @@ const BUTTON_EVENTS = ['rollover', 'rollout', 'mousedown', 'pressup'];
  * `ssMetadata`), the template's createjs.Stage subclass, and MovieClip-derived
  * helper classes that never initialize a timeline of their own (such as the
  * `AnMovieClip` base class newer Animate versions publish).
+ *
+ * The definition is returned in its compact form (each value written once;
+ * `expand` gives every value as it is).
  */
 export function extract(cjs: ICreatejs, source: IExtractSource): IDefinition {
 	const lib = source.lib;
@@ -114,6 +118,7 @@ export function extract(cjs: ICreatejs, source: IExtractSource): IDefinition {
 		frameImages: new Map<object, { sheet: string; frame: number }>(),
 		definition: {
 			converterVersion: VERSION,
+			form: 'expanded',
 			properties: readProperties(properties),
 			manifest: [],
 			spriteSheets: [],
@@ -170,7 +175,7 @@ export function extract(cjs: ICreatejs, source: IExtractSource): IDefinition {
 		utils.extractFrame = extractFrame;
 	}
 
-	return ctx.definition;
+	return compact(ctx.definition);
 }
 
 function recordFrameImage(ctx: IContext, image: TValue, spriteSheet: ICjsSpriteSheet, frame: number | string): void {

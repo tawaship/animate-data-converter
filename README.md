@@ -1,20 +1,55 @@
 # @tawaship/animate-data-converter
 
-Reads what Adobe Animate publishes for HTML5 Canvas (CreateJS) and extracts the symbols and
-their timelines as plain, engine-independent data.
-A player for a specific engine (such as `@tawaship/pixi-animate-runtime` for PixiJS) builds on this data,
-so that content made in Animate can be played without running the published code or CreateJS at play time.
+Turns what Adobe Animate publishes for HTML5 Canvas into plain data that any engine can play from.
+
+- **What you get**: every symbol and its timeline, with the value of every property at every frame as CreateJS
+  computes it, as JSON-ready data (written compactly; every value can be expanded)
+- **What it is for**: building a player for an engine without CreateJS and without the published code at play
+  time. [@tawaship/pixi-animate-runtime](https://github.com/tawaship/pixi-animate-runtime) is such a player for
+  PixiJS, and runs this package for you
+- **How**: a command (or a function) reads the published JavaScript at development time
 
 **Status: under development.** The format of the extracted data may still change between 0.x versions
 (a definition records the version that extracted it, see `converterVersion` below).
 
 API reference: https://tawaship.github.io/animate-data-converter/docs/
 
-**Convert only content you trust.** Extracting runs the published JavaScript, frame scripts included, in
-Node.js. The `vm` context keeps the published code apart from the converter's own objects, but it is not a
-security boundary: code in the file can reach what Node.js can (files, commands, the network) with your
-permissions. Treat a published file as you would treat a script you run: convert content published by you or
-by people you trust.
+**Convert only content you trust.** Extracting runs the published JavaScript, frame scripts included. It
+runs in a sandbox: QuickJS, a separate JavaScript engine compiled to WebAssembly, which is given nothing of
+your machine (no files, no commands, no network, no function of Node.js); only the published file goes in and
+the definition comes out, as text. Running code is never without risk all the same: a flaw in the sandbox or
+the engines could let code in the file reach further. Convert content published by you or by people you
+trust, and treat content you receive (from a contractor, an asset store and so on) as code you would run.
+
+## Quick start
+
+To play Animate content on PixiJS, you do not need this package directly: use
+[@tawaship/pixi-animate-runtime](https://github.com/tawaship/pixi-animate-runtime), whose command line tool runs it
+for you. Use this package to get the data itself:
+
+1. **Publish from Animate.** In Adobe Animate, publish the document for HTML5 Canvas (you get `game.js` next
+   to `game.html`).
+
+2. **Install.** In your project (Node.js 18 or later):
+
+   ```
+   npm install --save-dev @tawaship/animate-data-converter
+   ```
+
+3. **Extract.**
+
+   ```
+   npx animate-data-converter game.js --out game.json --pretty
+   ```
+
+   `game.json` holds the definition of every symbol of `game.js`. When the content uses something the converter
+   does not support, each one is listed and nothing is written.
+
+4. **Read it.** The definition is in a compact form, each value written once; `--expanded` writes every value
+   where it applies instead, which is easier to read. [Reading a definition](#reading-a-definition) explains
+   both, and the [API reference](https://tawaship.github.io/animate-data-converter/docs/) describes every field.
+
+From a script, `extractPublishedFile('game.js')` gives the same definition (see [API](#api)).
 
 ## What you need
 
@@ -22,7 +57,8 @@ by people you trust.
 - The published JavaScript file (`<document name>.js`, next to the published HTML)
 
 Images and sounds are not read. The converter only needs the JavaScript. CreateJS 1.0.0, the version
-Animate publishes for, comes with the converter (through `@tawaship/createjs-module`); you do not need to provide it.
+Animate publishes for, comes with the converter (through `@tawaship/createjs-module`), and so does the sandbox
+it runs the published code in (QuickJS, through `quickjs-emscripten-core`); you do not need to provide either.
 
 ## Supported versions
 
@@ -38,12 +74,14 @@ Use the command line tool to turn a published file into a JSON file:
 npx animate-data-converter game.js --out game.json
 ```
 
-This writes the definition of every symbol in `game.js` to `game.json`.
+This writes the definition of every symbol in `game.js` to `game.json`, in its compact form (see
+[The compact and the expanded form](#the-compact-and-the-expanded-form)).
 
 | Option | Effect |
 |---|---|
 | `--out <file>` | Where to write the JSON. Without it, the JSON goes to standard output |
 | `--pretty` | Indents the JSON so that it is easier to read |
+| `--expanded` | Writes the expanded form (every value as it is) instead of the compact one |
 | `--force` | Writes the JSON even when the content uses features the converter does not support |
 
 Exit codes: `0` when the definition was written, `1` when the content uses unsupported features
@@ -57,30 +95,34 @@ Use the API to extract from a script or a build tool:
 ```js
 const { extractPublishedFile } = require('@tawaship/animate-data-converter');
 
-const definition = extractPublishedFile('game.js');
-if (definition.issues.length) {
+extractPublishedFile('game.js').then(definition => {
 	definition.issues.forEach(issue => console.warn(issue.symbol, issue.message));
-}
+});
 ```
 
-This gives the same definition the command line tool writes, as a JavaScript object.
+This gives the same definition the command line tool writes, as a JavaScript object (through a promise: the
+sandbox is set up asynchronously).
 
 | Function | Use it for |
 |---|---|
-| `extractPublishedFile(publishedPath)` | Extracting from a file |
-| `extractPublished({ published })` | Extracting from source text you already have |
-| `loadPublished({ published })` | Running the published code yourself: returns the CreateJS namespace and what `extract()` reads |
-| `extract(createjs, { lib, spriteSheets, images, adobeAn })` | Extracting from content already running in a CreateJS environment you set up |
+| `extractPublishedFile(publishedPath)` | Extracting from a file (a promise of the definition) |
+| `extractPublished({ published })` | Extracting from source text you already have (a promise of the definition) |
+| `extract(createjs, { lib, spriteSheets, images, adobeAn })` | Extracting from content already running in a CreateJS environment you set up (where you run it is up to you) |
+| `expand(definition)` | The expanded form of a definition (every value as it is) |
+| `compact(expanded)` | The compact form of an expanded definition (what the functions above give) |
 
-`loadPublished()` runs CreateJS 1.0.0 and the published code in an isolated Node `vm` context with a minimal
-stand-in for the browser, and connects the images and sprite sheets the way the published HTML does
-(no file is loaded). Every call gets its own context, so several files can be converted in one process.
+`extractPublished()` and `extractPublishedFile()` run CreateJS 1.0.0 and the published code in a fresh sandbox
+(QuickJS) with a minimal stand-in for the browser, and connect the images and sprite sheets the way the
+published HTML does (no file is loaded). The published code is stopped when it runs longer than a minute or uses
+more than 1 GB. Every call gets its own sandbox, so several files can be converted in one process. Numbers that
+come out of math functions (eased tween values) can differ from another engine's in their last digit.
 
 If you call `extract()` on an environment of your own, images created while the symbols are constructed
 must report that they have loaded as soon as an `onload` handler is assigned. Published code that uses
 sprite sheets sets bitmap fills in such a handler; when it never runs, those fills are missing from the definition.
 
-The TypeScript types of the definition (`IDefinition` and the types it is made of) are exported as well.
+The TypeScript types of the definition are exported as well: `IDefinition` (the compact form),
+`IExpandedDefinition` (the expanded form) and the types they are made of.
 
 ## What the definition contains
 
@@ -125,6 +167,27 @@ Every type and field of the definition is described in the [API reference](https
 (`IDefinition` and the types it is made of). This section shows how the parts fit, and what a player has to
 do itself to play a definition the way CreateJS plays the published content.
 
+### The compact and the expanded form
+
+The extracted definition is in its **compact form** (`form: 'compact'`): every value is kept, but written once.
+`expand()` gives the **expanded form** (`form: 'expanded'`), value for value the same, where every value is
+written where it applies; `compact()` turns an expanded definition back. The compact form is about the size of
+the published file; the expanded form is several times, up to about twenty times, its size.
+
+What the compact form writes once, and how `expand()` writes it out:
+
+- Drawings: `graphics` holds every drawing of the content, identical ones merged; a MovieClip symbol's
+  `graphics` lists the indexes of its drawings in it. A command is `[kind, value, ...]`: the kind is an index
+  into `commandKinds` (`[type, names]`), and the values are those of the props named there, in that order
+- Slots: `slotTemplates` holds every slot without its initial values, the fields at their defaults
+  (`SLOT_DEFAULTS`: null, or false for `filterCacheListener` and `parentSet`) left out; a symbol's slot is the
+  index of its template, or `[index, init]` when it has initial values
+- Tweens: `values` holds the tween's distinct values (each the values of its `props`, in order) and
+  `frames[position]` the index of the position's values. In a display list, an entry that places a slot with
+  no props is the slot's index
+
+The rest of this section describes the expanded form.
+
 ### How the parts fit
 
 - `symbols[id]` is a symbol of the published library: a MovieClip (`kind: 'movieclip'`), a Sprite or a Bitmap
@@ -139,10 +202,6 @@ do itself to play a definition the way CreateJS plays the published content.
   properties set as each is placed
 - Frame scripts are `actions` of the tweens: the source text of a function and the position it runs at
 - `spriteSheets`, `manifest` and `properties` are those of the published `lib`
-
-Values are recorded for every frame, as they are: a definition is several times, up to about twenty times,
-the size of the published file. Compress it in your own layer when you keep or ship it
-(`@tawaship/pixi-animate-runtime`'s generator does).
 
 ### What a player has to do
 
@@ -183,7 +242,9 @@ are put into the definition on purpose to confirm that the comparison notices th
 ### 0.1.0
 
 - First release: extracts every symbol of content published by Adobe Animate for HTML5 Canvas, with its timeline
-  evaluated at every frame, as plain data (the command line tool and the API), and lists the features it does not support
+  evaluated at every frame, as plain data written in a compact form (`expand()` and `--expanded` give every value
+  as it is), with the command line tool and the API, running the published code in a sandbox (QuickJS on
+  WebAssembly), and lists the features it does not support
 
 ## License
 

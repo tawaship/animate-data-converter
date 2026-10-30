@@ -1,13 +1,15 @@
 import * as fs from 'fs';
 import { extractPublishedFile } from './load';
+import { expand } from './compact';
 import { IDefinition } from './types';
 
 const USAGE = [
-	'Usage: animate-data-converter <published.js> [--out <file.json>] [--pretty] [--force]',
+	'Usage: animate-data-converter <published.js> [--out <file.json>] [--pretty] [--expanded] [--force]',
 	'',
 	'  <published.js>          the JavaScript file Animate published for HTML5 Canvas',
 	'  --out <file>            where to write the definition (standard output when omitted)',
 	'  --pretty                indent the JSON',
+	'  --expanded              write the expanded definition (every value as it is) instead of the compact one',
 	'  --force                 write the definition even when the content uses unsupported features'
 ].join('\n');
 
@@ -20,11 +22,12 @@ interface ICliArgs {
 	published: string | null;
 	out: string | null;
 	pretty: boolean;
+	expanded: boolean;
 	force: boolean;
 }
 
 function parseArgs(args: string[]): ICliArgs | string {
-	const parsed: ICliArgs = { published: null, out: null, pretty: false, force: false };
+	const parsed: ICliArgs = { published: null, out: null, pretty: false, expanded: false, force: false };
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
@@ -36,6 +39,8 @@ function parseArgs(args: string[]): ICliArgs | string {
 			parsed.out = value;
 		} else if (arg === '--pretty') {
 			parsed.pretty = true;
+		} else if (arg === '--expanded') {
+			parsed.expanded = true;
 		} else if (arg === '--force') {
 			parsed.force = true;
 		} else if (arg.indexOf('--') === 0 || parsed.published !== null) {
@@ -57,7 +62,7 @@ function parseArgs(args: string[]): ICliArgs | string {
  * (they are listed, and nothing is written unless --force is given), 2 for
  * usage and loading errors.
  */
-export function runCli(args: string[], io: ICliIO): number {
+export async function runCli(args: string[], io: ICliIO): Promise<number> {
 	const parsed = parseArgs(args);
 	if (typeof parsed === 'string') {
 		io.stderr(parsed + '\n\n' + USAGE + '\n');
@@ -66,7 +71,7 @@ export function runCli(args: string[], io: ICliIO): number {
 
 	let definition: IDefinition;
 	try {
-		definition = extractPublishedFile(parsed.published || '');
+		definition = await extractPublishedFile(parsed.published || '');
 	} catch (e) {
 		io.stderr('could not load ' + parsed.published + ': ' + (e instanceof Error ? e.message : String(e)) + '\n');
 		return 2;
@@ -80,7 +85,7 @@ export function runCli(args: string[], io: ICliIO): number {
 		return 1;
 	}
 
-	const json = JSON.stringify(definition, null, parsed.pretty ? '\t' : undefined) + '\n';
+	const json = JSON.stringify(parsed.expanded ? expand(definition) : definition, null, parsed.pretty ? '\t' : undefined) + '\n';
 	if (parsed.out) {
 		fs.writeFileSync(parsed.out, json);
 	} else {

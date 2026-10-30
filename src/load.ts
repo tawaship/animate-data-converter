@@ -1,167 +1,131 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as vm from 'vm';
-import { ICreatejs, IExtractSource, IPropBag, TValue } from './createjs';
+import { newQuickJSWASMModuleFromVariant, shouldInterruptAfterDeadline, QuickJSWASMModule, QuickJSContext } from 'quickjs-emscripten-core';
+import variant from '@jitl/quickjs-wasmfile-release-sync';
 import { IDefinition } from './types';
-import { extract } from './extract';
-import { createSandbox, createLoadedImage } from './environment';
 
 export interface ILoadOptions {
 	/** Source text of the published JS */
 	published: string;
-	/** File name shown in error stacks */
+	/** The published file's name, shown in messages */
 	publishedFilename?: string;
-	/** Where console output of the published code goes (silenced by default) */
-	console?: IPropBag;
 }
-
-export interface ILoadedContent {
-	/** The createjs namespace the content was run with */
-	createjs: ICreatejs;
-	/** What extract() reads */
-	source: IExtractSource;
-}
-
-const SILENT_CONSOLE: IPropBag = {
-	log() { /* silenced */ },
-	info() { /* silenced */ },
-	debug() { /* silenced */ },
-	warn() { /* silenced */ },
-	error() { /* silenced */ }
-};
 
 /**
  * The createjs runtime: the CreateJS 1.0.0 combined build Animate publishes
- * for, as @tawaship/createjs-module exports it. Its code refers to the browser
- * globals (window, document) as soon as it runs, so it is not required into
- * Node but run inside each vm context, as a CommonJS module, from its source.
+ * for, as @tawaship/createjs-module exports it (CommonJS module source, run
+ * inside the sandbox).
  */
 const CREATEJS_MODULE = '@tawaship/createjs-module';
-let createjsScript: vm.Script | null = null;
 
-function getCreatejsScript(): vm.Script {
-	if (!createjsScript) {
-		const file = require.resolve(CREATEJS_MODULE);
-		const source = fs.readFileSync(file, 'utf8');
-		createjsScript = new vm.Script('(function (module, exports) {' + source + '\n})', { filename: path.basename(file) });
+/** The script run inside the sandbox (inside.ts, built next to this bundle) */
+const INSIDE_FILE = 'animate-data-converter.inside.js';
+
+/** How long the published code may run, in milliseconds, before it is stopped */
+const TIME_LIMIT = 60000;
+
+/** How much memory the sandbox may use, in bytes */
+const MEMORY_LIMIT = 1024 * 1024 * 1024;
+
+let quickjs: Promise<QuickJSWASMModule> | null = null;
+let sources: { createjs: string; inside: string } | null = null;
+
+function getQuickJS(): Promise<QuickJSWASMModule> {
+	if (!quickjs) {
+		quickjs = newQuickJSWASMModuleFromVariant(variant);
 	}
-	return createjsScript;
+	return quickjs;
 }
 
-function isPropBag(value: TValue): value is IPropBag {
-	return value !== null && (typeof value === 'object' || typeof value === 'function');
+function getSources(): { createjs: string; inside: string } {
+	if (!sources) {
+		sources = {
+			createjs: fs.readFileSync(require.resolve(CREATEJS_MODULE), 'utf8'),
+			inside: fs.readFileSync(path.join(__dirname, INSIDE_FILE), 'utf8')
+		};
+	}
+	return sources;
 }
 
-function isCreatejs(value: TValue): value is ICreatejs {
-	return isPropBag(value) && ['DisplayObject', 'MovieClip', 'Shape', 'Sprite', 'Bitmap', 'Text', 'Stage', 'Graphics', 'ColorFilter', 'ButtonHelper']
-		.every(name => typeof value[name] === 'function') && isPropBag(value.SpriteSheetUtils);
+/** Runs code in the sandbox; its result as a string, or the error it threw */
+function evaluate(context: QuickJSContext, code: string, filename: string): string {
+	const result = context.evalCode(code, filename);
+	if (result.error) {
+		const message = context.getProp(result.error, 'message');
+		const raw = context.typeof(message) === 'string' ? context.getString(message) : 'unknown error';
+		// QuickJS stops the code when the interrupt handler (the time limit) says so
+		const text = raw === 'interrupted' ? 'the published code ran longer than ' + TIME_LIMIT / 1000 + ' seconds and was stopped' : raw;
+		message.dispose();
+		result.error.dispose();
+		throw new Error(text);
+	}
+	const text = context.typeof(result.value) === 'string' ? context.getString(result.value) : '';
+	result.value.dispose();
+	return text;
 }
 
-function call(owner: IPropBag, name: string, ...args: TValue[]): TValue {
-	const method = owner[name];
-	if (typeof method !== 'function') {
-		throw new Error('"' + name + '" is not a function');
-	}
-	return method.apply(owner, args);
+/** Whether data read back from the sandbox is a definition (in its compact form) */
+function isDefinition(value: object | null): value is IDefinition {
+	return value !== null && Reflect.get(value, 'form') === 'compact' && typeof Reflect.get(value, 'converterVersion') === 'string'
+		&& Reflect.get(value, 'symbols') !== null && typeof Reflect.get(value, 'symbols') === 'object' && Array.isArray(Reflect.get(value, 'issues'));
 }
 
-/**
- * Runs createjs (CreateJS 1.0.0, see CREATEJS_MODULE) and the published code
- * in a fresh vm context and wires up the
- * assets the way the HTML template does, without loading anything: every
- * manifest entry gets a stand-in image (its `src` is the entry's path), and
- * every sprite sheet of `lib.ssMetadata` is built over the manifest image of
- * the same id. MotionGuidePlugin is installed, as the template does for
- * content with motion guides.
- */
-export function loadPublished(options: ILoadOptions): ILoadedContent {
-	const sandbox = createSandbox(options.console ? options.console : SILENT_CONSOLE);
-	const context = vm.createContext(sandbox);
-	const global: TValue = vm.runInContext('this', context);
-	if (!isPropBag(global)) {
-		throw new Error('the vm context has no global object');
+/** The definition from the sandbox's result (`{ ok: true, definition }` or `{ ok: false, message }`, as JSON) */
+function definitionOf(json: string): IDefinition {
+	const result: object | null = JSON.parse(json);
+	if (result === null || typeof result !== 'object') {
+		throw new Error('the sandbox gave no result');
 	}
-	global.window = global;
-	global.self = global;
-
-	// The published code reaches createjs through the global `createjs`
-	const createjsModule: IPropBag = { exports: {} };
-	const runModule: TValue = getCreatejsScript().runInContext(context);
-	if (typeof runModule !== 'function') {
-		throw new Error('could not run ' + CREATEJS_MODULE);
+	if (Reflect.get(result, 'ok') !== true) {
+		const message = Reflect.get(result, 'message');
+		throw new Error(typeof message === 'string' ? message : 'the extraction failed');
 	}
-	runModule.call(global, createjsModule, createjsModule.exports);
-	const cjs: TValue = createjsModule.exports;
-	if (!isCreatejs(cjs)) {
-		throw new Error(CREATEJS_MODULE + ' did not export a createjs namespace with the expected classes');
+	const definition = Reflect.get(result, 'definition');
+	if (!isDefinition(definition)) {
+		throw new Error('the sandbox gave no definition');
 	}
-	global.createjs = cjs;
-
-	const plugin = cjs.MotionGuidePlugin;
-	if (isPropBag(plugin) && typeof plugin.install === 'function') {
-		call(plugin, 'install');
-	}
-
-	vm.runInContext(options.published, context, { filename: options.publishedFilename || 'published.js' });
-
-	const adobeAn: TValue = global.AdobeAn;
-	const compositions = isPropBag(adobeAn) ? adobeAn.compositions : undefined;
-	if (!isPropBag(adobeAn) || !isPropBag(compositions)) {
-		throw new Error('the published code registered no composition (AdobeAn.compositions); is it Animate HTML5 Canvas output?');
-	}
-
-	const ids = Object.keys(compositions);
-	const composition = compositions[ids[ids.length - 1]];
-	if (!isPropBag(composition)) {
-		throw new Error('malformed composition');
-	}
-
-	const lib = call(composition, 'getLibrary');
-	const spriteSheets = call(composition, 'getSpriteSheet');
-	const images = call(composition, 'getImages');
-	if (!isPropBag(lib) || !isPropBag(spriteSheets) || !isPropBag(images)) {
-		throw new Error('the composition did not provide its library, sprite sheets and images');
-	}
-
-	const properties = lib.properties;
-	const manifest = isPropBag(properties) ? properties.manifest : undefined;
-	if (Array.isArray(manifest)) {
-		manifest.forEach((entry: TValue) => {
-			if (isPropBag(entry) && typeof entry.id === 'string' && typeof entry.src === 'string' && images[entry.id] === undefined) {
-				images[entry.id] = createLoadedImage(entry.src);
-			}
-		});
-	}
-
-	const ssMetadata = lib.ssMetadata;
-	if (Array.isArray(ssMetadata)) {
-		const SpriteSheet = cjs.SpriteSheet;
-		ssMetadata.forEach((meta: TValue) => {
-			if (isPropBag(meta) && typeof meta.name === 'string' && typeof SpriteSheet === 'function') {
-				const image = images[meta.name];
-				if (image === undefined) {
-					throw new Error('sprite sheet "' + meta.name + '" has no image in the manifest');
-				}
-				spriteSheets[meta.name] = Reflect.construct(SpriteSheet, [{ images: [image], frames: meta.frames }]);
-			}
-		});
-	}
-
-	return { createjs: cjs, source: { lib, spriteSheets, images, adobeAn } };
+	return definition;
 }
 
 /**
- * Loads published content (see loadPublished) and extracts its definition.
+ * Extracts the definition of published content. createjs and the published
+ * code (frame scripts included) run in a sandbox: QuickJS, a separate
+ * JavaScript engine compiled to WebAssembly, which is given nothing of the
+ * host (no files, no commands, no network, no function of Node). Only the
+ * sources go in and the definition comes out, as text. The published code is
+ * stopped when it runs longer than a minute or uses more than 1 GB.
  */
-export function extractPublished(options: ILoadOptions): IDefinition {
-	const content = loadPublished(options);
-	return extract(content.createjs, content.source);
+export async function extractPublished(options: ILoadOptions): Promise<IDefinition> {
+	const QuickJS = await getQuickJS();
+	const code = getSources();
+	const runtime = QuickJS.newRuntime();
+	try {
+		runtime.setMemoryLimit(MEMORY_LIMIT);
+		runtime.setMaxStackSize(0);
+		runtime.setInterruptHandler(shouldInterruptAfterDeadline(Date.now() + TIME_LIMIT));
+		const context = runtime.newContext();
+		try {
+			evaluate(context, code.inside, INSIDE_FILE);
+			const pass = (name: string, value: string): void => {
+				const handle = context.newString(value);
+				context.setProp(context.global, name, handle);
+				handle.dispose();
+			};
+			pass('__createjs', code.createjs);
+			pass('__published', options.published);
+			return definitionOf(evaluate(context, 'AnimateDataConverterInside.extractInside(__createjs, __published)', options.publishedFilename || 'published.js'));
+		} finally {
+			context.dispose();
+		}
+	} finally {
+		runtime.dispose();
+	}
 }
 
 /**
  * extractPublished() with the published JS read from a file.
  */
-export function extractPublishedFile(publishedPath: string): IDefinition {
+export function extractPublishedFile(publishedPath: string): Promise<IDefinition> {
 	return extractPublished({
 		published: fs.readFileSync(publishedPath, 'utf8'),
 		publishedFilename: path.basename(publishedPath)

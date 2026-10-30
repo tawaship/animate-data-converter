@@ -1,6 +1,6 @@
 ---
 name: animate-data-converter-guide
-description: Use this skill whenever the user asks to extract, inspect, or debug the data that @tawaship/animate-data-converter extracts from Adobe Animate HTML5 Canvas (CreateJS) publish output — the engine-independent symbol and timeline definitions (IDefinition). Trigger on any mention of 'animate-data-converter', 'extractPublishedFile', 'extractPublished', 'loadPublished', 'IDefinition', 'converterVersion', definition JSON files, or unsupported-feature 'issues' reported for Animate content. To play content on PixiJS, use the pixi-animate-runtime-guide skill instead (its generator runs this converter for you); with Pixim.js, the pixim-animate-runtime-guide skill.
+description: Use this skill whenever the user asks to extract, inspect, or debug the data that @tawaship/animate-data-converter extracts from Adobe Animate HTML5 Canvas (CreateJS) publish output — the engine-independent symbol and timeline definitions (IDefinition). Trigger on any mention of 'animate-data-converter', 'extractPublishedFile', 'extractPublished', 'expand', 'compact', 'IDefinition', 'converterVersion', definition JSON files, or unsupported-feature 'issues' reported for Animate content. To play content on PixiJS, use the pixi-animate-runtime-guide skill instead (its generator runs this converter for you); with Pixim.js, the pixim-animate-runtime-guide skill.
 ---
 
 # @tawaship/animate-data-converter development skill
@@ -27,7 +27,8 @@ The content is assumed to be published by **Adobe Animate 24.0.15** for HTML5 Ca
 |---|---|
 | Entry point (everything exported) | `types/index.d.ts` |
 | The definition (`IDefinition` and the types it is made of) | `types/types.d.ts` |
-| `extractPublishedFile`, `extractPublished`, `loadPublished` | `types/load.d.ts` |
+| `extractPublishedFile`, `extractPublished` | `types/load.d.ts` |
+| `expand`, `compact`, `SLOT_DEFAULTS` | `types/compact.d.ts` |
 | `extract` | `types/extract.d.ts` |
 | The CreateJS surface `extract` reads | `types/createjs.d.ts` |
 
@@ -39,7 +40,7 @@ The content is assumed to be published by **Adobe Animate 24.0.15** for HTML5 Ca
 npx animate-data-converter game.js --out game.json --pretty
 ```
 
-- `--out <file>`: where to write (standard output without it). `--pretty`: indented JSON
+- `--out <file>`: where to write (standard output without it). `--pretty`: indented JSON. `--expanded`: the expanded form instead of the compact one
 - Exit code `1` when the content uses unsupported features (each one is listed, nothing is written unless `--force` is given), `2` when the file cannot be read or is not Animate HTML5 Canvas output
 
 ### API
@@ -47,20 +48,26 @@ npx animate-data-converter game.js --out game.json --pretty
 ```js
 const { extractPublishedFile } = require('@tawaship/animate-data-converter');
 
-const definition = extractPublishedFile('game.js');
-definition.issues.forEach(issue => console.warn(issue.symbol, issue.message));
+extractPublishedFile('game.js').then(definition => {
+  definition.issues.forEach(issue => console.warn(issue.symbol, issue.message));
+});
 ```
+
+The published code runs in a sandbox (QuickJS, a JavaScript engine compiled to WebAssembly, given nothing of the host), so extraction is asynchronous. Still tell the user to convert only content they trust (see the README).
 
 | Function | Use it for |
 |---|---|
-| `extractPublishedFile(path)` | Extracting from a file |
-| `extractPublished({ published })` | Extracting from source text already in hand |
-| `loadPublished({ published })` | Running the published code in an isolated `vm` context yourself; returns the CreateJS namespace and what `extract()` reads |
+| `extractPublishedFile(path)` | Extracting from a file (returns a promise) |
+| `extractPublished({ published })` | Extracting from source text already in hand (returns a promise) |
 | `extract(createjs, source)` | Extracting from content already running in an environment you set up |
+| `expand(definition)` / `compact(expanded)` | Converting between the compact form (what extraction gives) and the expanded form (every value as it is) |
 
-When calling `extract()` on an environment of your own, images created while symbols are constructed must report that they have loaded as soon as an `onload` handler is assigned; otherwise bitmap fills from sprite sheets are missing from the definition. Prefer `loadPublished()`, which does this.
+When calling `extract()` on an environment of your own, images created while symbols are constructed must report that they have loaded as soon as an `onload` handler is assigned; otherwise bitmap fills from sprite sheets are missing from the definition. Prefer `extractPublished()`, which runs the published code in its sandbox (QuickJS) and does this.
 
 ## What the definition holds
+
+The definition is extracted in its **compact form** (`form: 'compact'`): every value kept, written once (drawings in the content's `graphics` with `commandKinds`, slots as `slotTemplates` plus initial values, each tween's distinct `values` with the index of every position's values in `frames`). `expand()` gives the **expanded form** (`form: 'expanded'`), every value where it applies; read `IExpandedDefinition` for that. The README's "Reading a definition" explains both. pixi-animate-runtime's generator takes the compact form only.
+
 
 - `symbols`: every symbol of the published `lib`, under its library name (non-ASCII names kept as they are). Published content has no root of its own; any symbol can be played as a root (the published HTML picks one)
 - For a movie clip: labels, length, the display objects it owns with their initial state, masks, buttons, color effects, caching, and its tweens with **the exact value of every controlled property at every frame** (not approximated)

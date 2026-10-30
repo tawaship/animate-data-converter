@@ -468,6 +468,107 @@ export interface IIssue {
 }
 
 /**
+ * The definition with every value as it is (what `expand` gives): each slot
+ * whole, each tween's values at every position, and the drawings in each
+ * symbol. Published content has no root of its own: the HTML template merely
+ * instantiates one of the symbols. Every symbol in `lib` is extracted on an
+ * equal footing; which one to use as a root is up to the consumer.
+ */
+export interface IExpandedDefinition {
+	/**
+	 * The version of animate-data-converter that extracted the definition. What
+	 * reads a definition tells by it whether it can (a version it does not
+	 * read, or one newer than it knows of, which may hold what it leaves out)
+	 */
+	converterVersion: string;
+	/** Which form the definition is in */
+	form: 'expanded';
+	/** Primitive entries of the published `lib.properties` (width, height, fps, ...) */
+	properties: IPropMapDef;
+	/** `lib.properties.manifest`: the images and sounds the content loads */
+	manifest: IManifestEntryDef[];
+	/** `lib.ssMetadata` */
+	spriteSheets: ISpriteSheetDef[];
+	/** Every symbol, by its id */
+	symbols: { [id: string]: TSymbolDef };
+	/** Features found in the content that this version cannot represent */
+	issues: IIssue[];
+}
+
+/**
+ * A kind of drawing command: its type (the createjs command class name) and
+ * the names of its props, in the order a command of this kind gives their values.
+ */
+export type TCommandKindDef = [string, string[]];
+
+/**
+ * A drawing command: the index of its kind in `commandKinds`, then the values
+ * of its props in the kind's order.
+ */
+export type TCommandDef = TDataValue[];
+
+/**
+ * A drawing of the content's table, its commands written by kind.
+ */
+export interface IGraphicsDataDef {
+	/** The commands, in the order they are drawn */
+	commands: TCommandDef[];
+}
+
+/**
+ * A slot without its initial values, the fields at their defaults
+ * (`SLOT_DEFAULTS`) left out. Slots that differ only in their initial values
+ * share one template.
+ */
+export type TSlotTemplateDef = Pick<ISlotDef, 'kind'> & Partial<Omit<ISlotDef, 'kind' | 'init'>>;
+
+/**
+ * A slot of a symbol: the index of its template in `slotTemplates`, with its
+ * initial values (`init`) when it has any.
+ */
+export type TSlotRefDef = number | [number, IPropMapDef];
+
+/**
+ * A value of a tween: as in the expanded form, except that a display list
+ * entry that places a slot as it is (no props) is the slot's index.
+ */
+export type TCompactFrameValue = TFrameValue | Array<IStateEntryDef | number>;
+
+/**
+ * A tween whose values are written once each: the value of `props[i]` at a
+ * position is `values[frames[position]][i]`.
+ */
+export interface ICompactTweenDef extends Omit<ITweenDef, 'frames'> {
+	/** The tween's distinct values, each the values of its props in order */
+	values: TCompactFrameValue[][];
+	/** For every position (0..duration), the index of its values in `values` */
+	frames: number[];
+}
+
+/**
+ * A MovieClip symbol whose slots are templates, whose drawings are in the
+ * content's table and whose tweens write each value once.
+ */
+export interface ICompactMovieClipSymbolDef extends Omit<IMovieClipSymbolDef, 'slots' | 'graphics' | 'tweens'> {
+	/** The slots, by template and initial values */
+	slots: TSlotRefDef[];
+	/**
+	 * The symbol's drawings as indexes into the content's `graphics`: the
+	 * drawing a shape slot or a tween value calls n is `graphics[this.graphics[n]]`
+	 */
+	graphics: number[];
+	/** In timeline order (the order decides stacking) */
+	tweens: ICompactTweenDef[];
+}
+
+/**
+ * A symbol of the definition, told apart by `kind`.
+ */
+export type TCompactSymbolDef = ICompactMovieClipSymbolDef | ISpriteSymbolDef | IBitmapSymbolDef;
+
+/**
+ * The definition as extracted: the expanded definition with nothing left out
+ * but each value written once (`expand` gives the expanded form back exactly).
  * Published content has no root of its own: the HTML template merely
  * instantiates one of the symbols. Every symbol in `lib` is extracted on an
  * equal footing; which one to use as a root is up to the consumer.
@@ -479,14 +580,22 @@ export interface IDefinition {
 	 * read, or one newer than it knows of, which may hold what it leaves out)
 	 */
 	converterVersion: string;
+	/** Which form the definition is in */
+	form: 'compact';
 	/** Primitive entries of the published `lib.properties` (width, height, fps, ...) */
 	properties: IPropMapDef;
 	/** `lib.properties.manifest`: the images and sounds the content loads */
 	manifest: IManifestEntryDef[];
 	/** `lib.ssMetadata` */
 	spriteSheets: ISpriteSheetDef[];
+	/** Every drawing of the content, identical ones merged (shared by every symbol that shows them) */
+	graphics: IGraphicsDataDef[];
+	/** The kinds of the drawings' commands */
+	commandKinds: TCommandKindDef[];
+	/** The slots of every symbol without their initial values, identical ones merged */
+	slotTemplates: TSlotTemplateDef[];
 	/** Every symbol, by its id */
-	symbols: { [id: string]: TSymbolDef };
+	symbols: { [id: string]: TCompactSymbolDef };
 	/** Features found in the content that this version cannot represent */
 	issues: IIssue[];
 }
