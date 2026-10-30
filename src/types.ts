@@ -31,27 +31,62 @@ export const TEXT_KEYS = ['text', 'font', 'color', 'textAlign', 'textBaseline', 
  */
 export type TDataValue = number | string | boolean | null | TDataValue[] | IDataMap;
 
+/**
+ * A JSON object: property names to JSON values.
+ */
 export interface IDataMap {
 	[key: string]: TDataValue;
 }
 
+/**
+ * A rectangle, as createjs.Rectangle holds it.
+ */
 export interface IRectDef {
+	/** Left edge */
 	x: number;
+	/** Top edge */
 	y: number;
+	/** Width */
 	width: number;
+	/** Height */
 	height: number;
 }
 
+/**
+ * The kind of a display object an instance owns. `unsupported` is any other
+ * display object (it is also listed in `issues`).
+ */
 export type TDisplayKind = 'movieclip' | 'shape' | 'sprite' | 'bitmap' | 'text' | 'unsupported';
 
+/**
+ * What a tween writes to (or what a state entry or a filter cache entry
+ * refers to), inside the symbol:
+ *
+ * - `self`: the instance of the symbol itself (its own `x`, `alpha`, ...)
+ * - `slot`: the display object in `slots[slot]`
+ * - `filter`: the filter `filters[filter]` of the display object in
+ *   `slots[slot]` (color effect tweens write to the ColorFilter itself)
+ * - `object`: a plain object that is not displayed. Published content keeps its
+ *   display list this way: a tween of `{}` writes `state` (see IStateEntryDef)
+ */
 export type TTargetDef =
 	| { type: 'self' }
 	| { type: 'slot'; slot: number }
 	| { type: 'filter'; slot: number; filter: number }
 	| { type: 'object' };
 
+/**
+ * One entry of a display list (createjs's `state` array: `{ t, p }`).
+ * The value of a `state` property is the whole display list of the symbol at
+ * that frame: the display objects in it, bottom to top. Placing them follows
+ * createjs (MovieClip `_addManagedChild`): an object whose `_off` is true is
+ * not placed, and an independent MovieClip with `autoReset` that was not on
+ * the list on the frame before starts its timeline again.
+ */
 export interface IStateEntryDef {
+	/** The display object on the list (a `slot` target) */
 	target: TTargetDef;
+	/** Properties set on it as it is placed (the entry's `p`), or null when the entry has none */
 	props: IPropMapDef | null;
 }
 
@@ -60,15 +95,28 @@ export interface IStateEntryDef {
  * index into the symbol's `graphics` table.
  */
 export interface IGraphicsRefDef {
+	/** Index into the symbol's `graphics` */
 	graphics: number;
 }
 
+/**
+ * The value of a property at a frame: a number, string, boolean or null as
+ * createjs holds it (`rotation` and skews in degrees, `alpha` 0 to 1, colors
+ * and blends as strings), a display list (the value of `state`), or a
+ * Graphics (the value of `graphics`).
+ */
 export type TFrameValue = number | string | boolean | null | IStateEntryDef[] | IGraphicsRefDef;
 
+/**
+ * Property names to values (initial state, state entry properties, document properties).
+ */
 export interface IPropMapDef {
 	[key: string]: TFrameValue;
 }
 
+/**
+ * A frame script: a function the timeline calls when it reaches a position.
+ */
 export interface IActionDef {
 	/** Timeline position the action sits on */
 	position: number;
@@ -78,11 +126,20 @@ export interface IActionDef {
 	 * its own body are not carried along.
 	 */
 	source: string;
+	/**
+	 * The arguments it is called with, or null for the default (createjs calls
+	 * it with the tween itself). `this` is the instance of the symbol
+	 */
 	params: TFrameValue[] | null;
 }
 
+/**
+ * One tween of a symbol's timeline, evaluated at every integer position.
+ */
 export interface ITweenDef {
+	/** What the tween writes to */
 	target: TTargetDef;
+	/** Length in frames: the tween has positions 0 to duration */
 	duration: number;
 	/** The properties this tween writes, i.e. its managed properties */
 	props: string[];
@@ -95,6 +152,7 @@ export interface ITweenDef {
 	 * (the last step whose start is at or before the position).
 	 */
 	keyframes: number[];
+	/** Frame scripts on this tween, in the order they run */
 	actions: IActionDef[];
 }
 
@@ -110,38 +168,70 @@ export interface ITweenDef {
  * makes it with `SpriteSheetUtils.extractFrame` and sets the fill once it loads).
  */
 export interface IGraphicsCommandDef {
+	/** The createjs command class name (`createjs.Graphics.<type>`) */
 	type: string;
+	/** The command's own properties (coordinates, colors, styles, ...) */
 	props: IDataMap;
 }
 
+/**
+ * A Graphics: its drawing commands, in the order they are drawn.
+ */
 export interface IGraphicsDef {
+	/** The commands, as createjs holds them */
 	commands: IGraphicsCommandDef[];
 }
 
+/**
+ * What a Sprite shows: a frame of a sprite sheet.
+ */
 export interface ISpriteDef {
 	/** Sprite sheet name (`lib.ssMetadata[].name`) */
 	sheet: string;
+	/** Frame index in the sprite sheet */
 	frame: number;
+	/** Whether the Sprite stays on that frame (published sprites do) */
 	paused: boolean;
 }
 
+/**
+ * What a Bitmap shows: an image of the manifest, or a part of it.
+ */
 export interface IBitmapDef {
 	/** Image id (`lib.properties.manifest[].id`) */
 	image: string;
+	/** The part of the image shown, or null for the whole image */
 	sourceRect: IRectDef | null;
 }
 
+/**
+ * A filter on a display object (a color effect set in Animate).
+ */
 export interface IFilterDef {
 	/** createjs filter class name. Only ColorFilter is supported */
 	type: string;
+	/**
+	 * The filter's values. For ColorFilter: `redMultiplier`, `greenMultiplier`,
+	 * `blueMultiplier`, `alphaMultiplier` and `redOffset`, `greenOffset`,
+	 * `blueOffset`, `alphaOffset`
+	 */
 	props: IDataMap;
 }
 
+/**
+ * A display object's cache (`cache(x, y, width, height, scale)`), which
+ * createjs draws it through (filters take effect only on a cached object).
+ */
 export interface ICacheDef {
+	/** Left edge of the cached area, in the object's own coordinates */
 	x: number;
+	/** Top edge of the cached area */
 	y: number;
+	/** Width of the cached area */
 	width: number;
+	/** Height of the cached area */
 	height: number;
+	/** Scale the cache is drawn at */
 	scale: number;
 }
 
@@ -149,9 +239,13 @@ export interface ICacheDef {
  * A createjs.ButtonHelper attached to a slot.
  */
 export interface IButtonDef {
+	/** Label (or frame) shown when the pointer is out */
 	out: string | number;
+	/** Label (or frame) shown when the pointer is over */
 	over: string | number;
+	/** Label (or frame) shown when the pointer is down */
 	down: string | number;
+	/** Whether the button plays from those labels instead of stopping on them */
 	play: boolean;
 	/** Slot index of the hit area clip, if any */
 	hit: number | null;
@@ -165,24 +259,43 @@ export interface IButtonDef {
  * `instance` refers to a slot of the symbol that owns the list.
  */
 export interface IFilterCacheEntryDef {
+	/** The display object to cache again */
 	instance: TTargetDef;
+	/** First frame of the range */
 	startFrame: number;
+	/** Last frame of the range */
 	endFrame: number;
+	/** Left edge of the cached area */
 	x: number;
+	/** Top edge of the cached area */
 	y: number;
+	/** Width of the cached area */
 	w: number;
+	/** Height of the cached area */
 	h: number;
 }
 
+/**
+ * A display object an instance of a MovieClip symbol owns. Every instance of
+ * the symbol creates one of each, in the order of `slots`; tweens, state
+ * entries, masks and members refer to them by index.
+ */
 export interface ISlotDef {
+	/** What it is */
 	kind: TDisplayKind;
 	/** Symbol id for MovieClip slots, and for Sprite / Bitmap slots that are instances of a lib symbol */
 	symbol: string | null;
 	/** Constructor-time display properties */
 	init: IPropMapDef;
-	/** Per-instance MovieClip arguments (null unless kind is movieclip) */
+	/**
+	 * Per-instance MovieClip arguments (null unless kind is movieclip): how its
+	 * timeline follows its parent's (`independent`, `single` or `synched`, as
+	 * createjs.MovieClip names them)
+	 */
 	mode: string | null;
+	/** The frame its timeline starts from */
 	startPosition: number | null;
+	/** How it loops, as createjs holds it (`-1` loops for ever, `0` does not loop) */
 	loop: number | null;
 	/** Index into the symbol's `graphics` table (shape) */
 	graphics: number | null;
@@ -192,6 +305,7 @@ export interface ISlotDef {
 	 * instance differs from it
 	 */
 	sprite: ISpriteDef | null;
+	/** Bitmap content (as `sprite`) */
 	bitmap: IBitmapDef | null;
 	/** Text properties (`TEXT_KEYS`) */
 	text: IDataMap | null;
@@ -199,8 +313,11 @@ export interface ISlotDef {
 	mask: number | null;
 	/** Slot index of the hit area */
 	hitArea: number | null;
+	/** Filters set on it, or null */
 	filters: IFilterDef[] | null;
+	/** Its cache, or null when it is not cached */
 	cache: ICacheDef | null;
+	/** The ButtonHelper attached to it, or null */
 	button: IButtonDef | null;
 	/**
 	 * Whether the template's AdobeAn.handleFilterCache is attached as a tick
@@ -215,13 +332,24 @@ export interface ISlotDef {
 	parentSet: boolean;
 }
 
+/**
+ * A named member of an instance (`this.<name>` set by the constructor: an
+ * instance name given in Animate).
+ */
 export interface IMemberDef {
+	/** The property name */
 	name: string;
+	/** Slot index of the display object it refers to */
 	slot: number;
 }
 
+/**
+ * A frame label of a timeline.
+ */
 export interface ILabelDef {
+	/** The label */
 	label: string;
+	/** The position it marks */
 	position: number;
 }
 
@@ -229,8 +357,11 @@ export interface ILabelDef {
  * MovieClip constructor arguments as resolved on an instance.
  */
 export interface IInstanceArgsDef {
+	/** `independent`, `single` or `synched` */
 	mode: string;
+	/** The frame the timeline starts from */
 	startPosition: number;
+	/** How it loops (`-1` for ever, `0` not) */
 	loop: number;
 }
 
@@ -242,18 +373,27 @@ interface ISymbolBaseDef {
 	 * get an id starting with `#`.
 	 */
 	id: string;
+	/** The bounds published on the symbol (`nominalBounds`), or null */
 	nominalBounds: IRectDef | null;
+	/** The bounds of each frame (`frameBounds`), or null when not published */
 	frameBounds: IRectDef[] | null;
 }
 
+/**
+ * A MovieClip symbol: the display objects every instance owns and its timeline.
+ */
 export interface IMovieClipSymbolDef extends ISymbolBaseDef {
+	/** The kind of symbol */
 	kind: 'movieclip';
 	/** The resolved arguments when the symbol is constructed with none (null for symbols not in `lib`) */
 	defaults: IInstanceArgsDef | null;
+	/** Frame labels of its timeline */
 	labels: ILabelDef[];
+	/** Length of its timeline in frames */
 	duration: number;
 	/** Every display object an instance owns: members, children, tween and state targets, masks, hit areas */
 	slots: ISlotDef[];
+	/** Instance names the constructor sets (`this.<name>`) */
 	members: IMemberDef[];
 	/** Slots added as children without being driven by the timeline */
 	unmanaged: number[];
@@ -270,32 +410,60 @@ export interface IMovieClipSymbolDef extends ISymbolBaseDef {
 	filterCacheList: IFilterCacheEntryDef[] | null;
 }
 
+/**
+ * A Sprite symbol (a frame of a sprite sheet).
+ */
 export interface ISpriteSymbolDef extends ISymbolBaseDef {
+	/** The kind of symbol */
 	kind: 'sprite';
+	/** What it shows */
 	sprite: ISpriteDef;
 }
 
+/**
+ * A Bitmap symbol (an image of the manifest).
+ */
 export interface IBitmapSymbolDef extends ISymbolBaseDef {
+	/** The kind of symbol */
 	kind: 'bitmap';
+	/** What it shows */
 	bitmap: IBitmapDef;
 }
 
+/**
+ * A symbol of the published library, told apart by `kind`.
+ */
 export type TSymbolDef = IMovieClipSymbolDef | ISpriteSymbolDef | IBitmapSymbolDef;
 
+/**
+ * A sprite sheet of the published content (`lib.ssMetadata[]`).
+ */
 export interface ISpriteSheetDef {
+	/** Its name, which is also the id of its image in the manifest */
 	name: string;
 	/** As published in `lib.ssMetadata` (`[x, y, width, height, ...]` per frame) */
 	frames: TDataValue[];
 }
 
+/**
+ * A file the content loads (`lib.properties.manifest[]`).
+ */
 export interface IManifestEntryDef {
+	/** The id published code refers to the file by */
 	id: string;
+	/** Its path as published (relative to the published HTML, with the query Animate adds) */
 	src: string;
 }
 
+/**
+ * A feature found in the content that this version cannot represent.
+ */
 export interface IIssue {
+	/** Id of the symbol it was found in */
 	symbol: string;
+	/** Slot index it concerns, or null when it concerns the symbol */
 	slot: number | null;
+	/** What it is */
 	message: string;
 }
 
@@ -317,6 +485,7 @@ export interface IDefinition {
 	manifest: IManifestEntryDef[];
 	/** `lib.ssMetadata` */
 	spriteSheets: ISpriteSheetDef[];
+	/** Every symbol, by its id */
 	symbols: { [id: string]: TSymbolDef };
 	/** Features found in the content that this version cannot represent */
 	issues: IIssue[];

@@ -1,5 +1,5 @@
 /*!
- * @tawaship/animate-data-converter - v0.0.0
+ * @tawaship/animate-data-converter - v0.1.0
  * 
  * @author tawaship (makazu.mori@gmail.com)
  * @license MIT
@@ -59,7 +59,7 @@ const INIT_KEYS = [
 const TEXT_KEYS = ['text', 'font', 'color', 'textAlign', 'textBaseline', 'lineHeight', 'lineWidth', 'maxWidth', 'outline'];
 
 /** The version of this package (written in from package.json when the package is built) */
-const VERSION = "0.0.0";
+const VERSION = "0.1.0";
 
 /**
  * Properties a tween writes that carry no display state, left out of the

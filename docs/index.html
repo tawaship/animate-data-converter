@@ -1,0 +1,242 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>@tawaship/animate-data-converter - v0.1.0</title><meta name="description" content="Documentation for @tawaship/animate-data-converter"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script><script async src="assets/hierarchy.js" id="tsd-hierarchy-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar">
+<div class="tsd-toolbar-contents container"><a href="index.html" class="title">@tawaship/animate-data-converter - v0.1.0</a>
+<div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/>
+<ul role="listbox" id="tsd-search-results"></ul>
+<div id="tsd-search-status" aria-live="polite" aria-atomic="true">
+<div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header>
+<div class="container container-main">
+<div class="col-content">
+<div class="tsd-page-title">
+<h1>@tawaship/animate-data-converter - v0.1.0</h1></div>
+<div class="tsd-panel tsd-typography"><h1 id="tawashipanimate-data-converter" class="tsd-anchor-link">@tawaship/animate-data-converter<a href="#tawashipanimate-data-converter" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1>
+<p>Reads what Adobe Animate publishes for HTML5 Canvas (CreateJS) and extracts the symbols and
+their timelines as plain, engine-independent data.
+A player for a specific engine (such as <code>@tawaship/pixi-animate-runtime</code> for PixiJS) builds on this data,
+so that content made in Animate can be played without running the published code or CreateJS at play time.</p>
+<p><strong>Status: under development.</strong> The format of the extracted data may still change between 0.x versions
+(a definition records the version that extracted it, see <code>converterVersion</code> below).</p>
+<p>API reference: <a href="https://tawaship.github.io/animate-data-converter/docs/">https://tawaship.github.io/animate-data-converter/docs/</a></p>
+<p><strong>Convert only content you trust.</strong> Extracting runs the published JavaScript, frame scripts included, in
+Node.js. The <code>vm</code> context keeps the published code apart from the converter's own objects, but it is not a
+security boundary: code in the file can reach what Node.js can (files, commands, the network) with your
+permissions. Treat a published file as you would treat a script you run: convert content published by you or
+by people you trust.</p>
+<h2 id="what-you-need" class="tsd-anchor-link">What you need<a href="#what-you-need" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li>Node.js 18 or later. The converter runs at development time, not in the browser</li>
+<li>The published JavaScript file (<code>&lt;document name&gt;.js</code>, next to the published HTML)</li>
+</ul>
+<p>Images and sounds are not read. The converter only needs the JavaScript. CreateJS 1.0.0, the version
+Animate publishes for, comes with the converter (through <code>@tawaship/createjs-module</code>); you do not need to provide it.</p>
+<h2 id="supported-versions" class="tsd-anchor-link">Supported versions<a href="#supported-versions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<ul>
+<li>Content published by <strong>Adobe Animate 24.0.15</strong> for HTML5 Canvas. What this package reads is the form of the published
+JavaScript, which depends on the version of Animate; content published by other versions has not been checked</li>
+<li>CreateJS 1.0.0, the version Animate publishes for (it comes with the converter)</li>
+</ul>
+<h2 id="command-line" class="tsd-anchor-link">Command line<a href="#command-line" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Use the command line tool to turn a published file into a JSON file:</p>
+<pre><code><span class="hl-0">npx</span><span class="hl-1"> </span><span class="hl-0">animate</span><span class="hl-1">-</span><span class="hl-0">data</span><span class="hl-1">-</span><span class="hl-0">converter</span><span class="hl-1"> </span><span class="hl-0">game</span><span class="hl-1">.</span><span class="hl-0">js</span><span class="hl-1"> --</span><span class="hl-0">out</span><span class="hl-1"> </span><span class="hl-0">game</span><span class="hl-1">.</span><span class="hl-0">json</span>
+</code><button>Copy</button></pre>
+
+<p>This writes the definition of every symbol in <code>game.js</code> to <code>game.json</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--out &lt;file&gt;</code></td>
+<td>Where to write the JSON. Without it, the JSON goes to standard output</td>
+</tr>
+<tr>
+<td><code>--pretty</code></td>
+<td>Indents the JSON so that it is easier to read</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>Writes the JSON even when the content uses features the converter does not support</td>
+</tr>
+</tbody>
+</table>
+<p>Exit codes: <code>0</code> when the definition was written, <code>1</code> when the content uses unsupported features
+(each one is listed, and nothing is written unless <code>--force</code> is given), <code>2</code> when the files cannot be read
+or are not Animate HTML5 Canvas output.</p>
+<h2 id="api" class="tsd-anchor-link">API<a href="#api" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Use the API to extract from a script or a build tool:</p>
+<pre><code class="js"><span class="hl-2">const</span><span class="hl-1"> { </span><span class="hl-3">extractPublishedFile</span><span class="hl-1"> } = </span><span class="hl-4">require</span><span class="hl-1">(</span><span class="hl-5">&#39;@tawaship/animate-data-converter&#39;</span><span class="hl-1">);</span><br/><br/><span class="hl-2">const</span><span class="hl-1"> </span><span class="hl-3">definition</span><span class="hl-1"> = </span><span class="hl-4">extractPublishedFile</span><span class="hl-1">(</span><span class="hl-5">&#39;game.js&#39;</span><span class="hl-1">);</span><br/><span class="hl-6">if</span><span class="hl-1"> (</span><span class="hl-0">definition</span><span class="hl-1">.</span><span class="hl-0">issues</span><span class="hl-1">.</span><span class="hl-0">length</span><span class="hl-1">) {</span><br/><span class="hl-1">	</span><span class="hl-0">definition</span><span class="hl-1">.</span><span class="hl-0">issues</span><span class="hl-1">.</span><span class="hl-4">forEach</span><span class="hl-1">(</span><span class="hl-0">issue</span><span class="hl-1"> </span><span class="hl-2">=&gt;</span><span class="hl-1"> </span><span class="hl-0">console</span><span class="hl-1">.</span><span class="hl-4">warn</span><span class="hl-1">(</span><span class="hl-0">issue</span><span class="hl-1">.</span><span class="hl-0">symbol</span><span class="hl-1">, </span><span class="hl-0">issue</span><span class="hl-1">.</span><span class="hl-0">message</span><span class="hl-1">));</span><br/><span class="hl-1">}</span>
+</code><button type="button">Copy</button></pre>
+
+<p>This gives the same definition the command line tool writes, as a JavaScript object.</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>extractPublishedFile(publishedPath)</code></td>
+<td>Extracting from a file</td>
+</tr>
+<tr>
+<td><code>extractPublished({ published })</code></td>
+<td>Extracting from source text you already have</td>
+</tr>
+<tr>
+<td><code>loadPublished({ published })</code></td>
+<td>Running the published code yourself: returns the CreateJS namespace and what <code>extract()</code> reads</td>
+</tr>
+<tr>
+<td><code>extract(createjs, { lib, spriteSheets, images, adobeAn })</code></td>
+<td>Extracting from content already running in a CreateJS environment you set up</td>
+</tr>
+</tbody>
+</table>
+<p><code>loadPublished()</code> runs CreateJS 1.0.0 and the published code in an isolated Node <code>vm</code> context with a minimal
+stand-in for the browser, and connects the images and sprite sheets the way the published HTML does
+(no file is loaded). Every call gets its own context, so several files can be converted in one process.</p>
+<p>If you call <code>extract()</code> on an environment of your own, images created while the symbols are constructed
+must report that they have loaded as soon as an <code>onload</code> handler is assigned. Published code that uses
+sprite sheets sets bitmap fills in such a handler; when it never runs, those fills are missing from the definition.</p>
+<p>The TypeScript types of the definition (<code>IDefinition</code> and the types it is made of) are exported as well.</p>
+<h2 id="what-the-definition-contains" class="tsd-anchor-link">What the definition contains<a href="#what-the-definition-contains" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>The published code defines each symbol as a class whose constructor builds its children and timeline.
+The converter constructs each symbol once, reads what the constructor built, and evaluates the timeline
+at every frame. The result is plain data (it can be written as JSON) with one definition per symbol,
+shared by every instance:</p>
+<ul>
+<li>Every symbol of the published library, under its library name (non-ASCII names are kept as they are).
+Published content has no root of its own: any symbol can be played as a root</li>
+<li>For a MovieClip symbol: its frame labels and length, the display objects it owns (MovieClips, Shapes,
+Sprites, Bitmaps, Texts) with their initial state, masks, hit areas and buttons, color effects and caching,
+and its timeline</li>
+<li>The timeline as the exact value of every property the timeline controls, at every frame, as CreateJS
+computes it (tweens, easing and motion guides included). Values are not approximated</li>
+<li>Frame scripts as their source text, unchanged (including any <code>console.log</code>). They are not run or
+rewritten; running them is up to the player</li>
+<li>Drawing commands of shapes, including gradient and bitmap fills</li>
+<li>Sprite symbols with their sprite sheet frames (<code>lib.ssMetadata</code>), Bitmap symbols with their images
+(manifest ids), the manifest itself, and the document properties (size, frame rate, background color)</li>
+<li><code>converterVersion</code>: the version of this package that extracted the definition (also exported as
+<code>VERSION</code>). What reads a definition later can tell from it whether it knows the definition's form, for
+definitions kept as files and read by another version</li>
+</ul>
+<h3 id="content-the-converter-does-not-support" class="tsd-anchor-link">Content the converter does not support<a href="#content-the-converter-does-not-support" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>When the content uses one of these, the converter lists it in <code>issues</code> (the command line tool stops):</p>
+<ul>
+<li>The Animate camera (&quot;Advanced Layers&quot; output). Delete the camera layer and publish again</li>
+<li>Filters other than color effects (blur, glow, drop shadow and so on)</li>
+<li>Event listeners added by symbol code (other than buttons and the published filter cache handling)</li>
+<li>Looping, reversed or bouncing tweens, and passive waits, created by hand in symbol code</li>
+<li>Frame scripts that are not plain functions of the symbol (bound or native functions, an explicit scope)</li>
+<li>Display objects other than MovieClip, Shape, Sprite, Bitmap and Text</li>
+</ul>
+<p>Sounds are not part of the definition. The manifest entries of sounds are kept, and frame scripts that
+call <code>playSound()</code> keep that call in their text; whether it plays anything is up to the player.</p>
+<h2 id="reading-a-definition" class="tsd-anchor-link">Reading a definition<a href="#reading-a-definition" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>Every type and field of the definition is described in the <a href="https://tawaship.github.io/animate-data-converter/docs/">API reference</a>
+(<code>IDefinition</code> and the types it is made of). This section shows how the parts fit, and what a player has to
+do itself to play a definition the way CreateJS plays the published content.</p>
+<h3 id="how-the-parts-fit" class="tsd-anchor-link">How the parts fit<a href="#how-the-parts-fit" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li><code>symbols[id]</code> is a symbol of the published library: a MovieClip (<code>kind: 'movieclip'</code>), a Sprite or a Bitmap</li>
+<li>An instance of a MovieClip symbol owns the display objects in <code>slots</code>, created in that order. Everything
+else refers to them by index: tween targets, display list entries, masks, hit areas, <code>members</code> (the
+instance names set as <code>this.&lt;name&gt;</code>) and <code>unmanaged</code> (children added without the timeline). A slot of a
+nested MovieClip names its symbol in <code>symbol</code>; a Shape's drawing is <code>graphics[slot.graphics]</code> of the symbol</li>
+<li>The timeline is <code>duration</code> frames long, with <code>labels</code>. Each tween in <code>tweens</code> (in timeline order) writes
+its <code>props</code> to its <code>target</code>; <code>frames[position][i]</code> is the value of <code>props[i]</code> at that position. A value is a
+plain value, <code>{ graphics: n }</code> (the Graphics <code>graphics[n]</code> of the symbol), or, for the <code>state</code> property of an
+<code>object</code> target, the symbol's display list at that frame: the slots on it, bottom to top, with the
+properties set as each is placed</li>
+<li>Frame scripts are <code>actions</code> of the tweens: the source text of a function and the position it runs at</li>
+<li><code>spriteSheets</code>, <code>manifest</code> and <code>properties</code> are those of the published <code>lib</code></li>
+</ul>
+<p>Values are recorded for every frame, as they are: a definition is several times, up to about twenty times,
+the size of the published file. Compress it in your own layer when you keep or ship it
+(<code>@tawaship/pixi-animate-runtime</code>'s generator does).</p>
+<h3 id="what-a-player-has-to-do" class="tsd-anchor-link">What a player has to do<a href="#what-a-player-has-to-do" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<p>The definition holds what CreateJS computes for each frame. How CreateJS plays those frames is up to the
+player; to play as CreateJS 1.0.0 does:</p>
+<ul>
+<li><strong>Playing a timeline</strong>: advance the position every frame, loop as <code>loop</code> says, and go to labels. Tween
+values are written only when the position changes: while a clip plays they are written again on every
+frame (overriding what scripts wrote to those properties), but a stopped clip, a clip of one frame or a
+<code>gotoAndStop</code> to the current frame writes nothing, so values written by scripts stay. A property not in a
+tween's <code>props</code> is never written by it</li>
+<li><strong>Display lists</strong>: on every frame, set the display list from the <code>state</code> value, as CreateJS's MovieClip
+<code>_addManagedChild</code> does: an object whose <code>_off</code> is true is not placed, and an independent MovieClip with
+<code>autoReset</code> that was not on the list the frame before starts its timeline again</li>
+<li><strong>Child clips</strong>: an <code>independent</code> clip plays its own timeline. A <code>synched</code> or <code>single</code> clip shows the frame
+<code>startPosition</code> plus the distance from the start of the current step (<code>keyframes</code>) of the tween that placed it</li>
+<li><strong>Frame scripts</strong>: run <code>source</code> as a function when the timeline reaches its position, with <code>this</code> being the
+instance and the arguments <code>params</code> (the tween itself when null). Published scripts expect the names
+published code has around them: <code>cjs</code> / <code>createjs</code>, <code>lib</code>, and the page's globals (<code>exportRoot</code>, <code>stage</code>,
+<code>playSound</code>)</li>
+<li><strong>Drawing</strong>: compose transforms as CreateJS does (<code>regX</code> / <code>regY</code>, then rotation and skew, in degrees), apply
+<code>alpha</code>, <code>visible</code> and <code>compositeOperation</code> (a blend set on a container applies to its contents), clip
+masks by the shape of their path whatever its fill, apply ColorFilter values, and break Text into lines as
+CreateJS does (at spaces only; a <code>lineHeight</code> of 0 is 1.2 times the width of <code>M</code>)</li>
+</ul>
+<p><code>@tawaship/pixi-animate-runtime</code> is a player built this way, checked frame by frame against CreateJS.</p>
+<h2 id="how-correctness-is-checked" class="tsd-anchor-link">How correctness is checked<a href="#how-correctness-is-checked" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>The converter was developed with Claude (Anthropic's AI assistant). Its correctness rests on testing rather
+than on trust in the author: for every test content, the definition is written out as JSON, read back, and
+used to rebuild the content, and the rebuilt content is compared with the original running on CreateJS at
+every frame, including drawing commands, images, text, masks, filters, caching and buttons. Known faults
+are put into the definition on purpose to confirm that the comparison notices them.</p>
+<h2 id="change-log" class="tsd-anchor-link">Change log<a href="#change-log" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<h3 id="010" class="tsd-anchor-link">0.1.0<a href="#010" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3>
+<ul>
+<li>First release: extracts every symbol of content published by Adobe Animate for HTML5 Canvas, with its timeline
+evaluated at every frame, as plain data (the command line tool and the API), and lists the features it does not support</li>
+</ul>
+<h2 id="license" class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2>
+<p>MIT</p>
+</div></div>
+<div class="col-sidebar">
+<div class="page-menu">
+<div class="tsd-navigation settings">
+<details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>Settings</h3></summary>
+<div class="tsd-accordion-details">
+<div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span>
+<ul id="tsd-filter-options">
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li>
+<li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div>
+<div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div>
+<details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg>
+<h3>On This Page</h3></summary>
+<div class="tsd-accordion-details"><a href="#tawashipanimate-data-converter"><span>@tawaship/animate-<wbr/>data-<wbr/>converter</span></a>
+<ul>
+<li><a href="#what-you-need"><span>What you need</span></a></li>
+<li><a href="#supported-versions"><span>Supported versions</span></a></li>
+<li><a href="#command-line"><span>Command line</span></a></li>
+<li><a href="#api"><span>API</span></a></li>
+<li><a href="#what-the-definition-contains"><span>What the definition contains</span></a></li>
+<li>
+<ul>
+<li><a href="#content-the-converter-does-not-support"><span>Content the converter does not support</span></a></li></ul></li>
+<li><a href="#reading-a-definition"><span>Reading a definition</span></a></li>
+<li>
+<ul>
+<li><a href="#how-the-parts-fit"><span>How the parts fit</span></a></li>
+<li><a href="#what-a-player-has-to-do"><span>What a player has to do</span></a></li></ul></li>
+<li><a href="#how-correctness-is-checked"><span>How correctness is checked</span></a></li>
+<li><a href="#change-log"><span>Change log</span></a></li>
+<li>
+<ul>
+<li><a href="#010"><span>0.1.0</span></a></li></ul></li>
+<li><a href="#license"><span>License</span></a></li></ul></div></details></div>
+<div class="site-menu">
+<nav class="tsd-navigation"><a href="modules.html">@tawaship/animate-data-converter - v0.1.0</a>
+<ul class="tsd-small-nested-navigation" id="tsd-nav-container">
+<li>Loading...</li></ul></nav></div></div></div><footer>
+<p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer>
+<div class="overlay"></div></body></html>

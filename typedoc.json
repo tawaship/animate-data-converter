@@ -1,0 +1,14 @@
+{
+  "entryPoints": [
+    "src/index.ts"
+  ],
+  "tsconfig": "tsconfig.json",
+  "out": "docs",
+  "name": "@tawaship/animate-data-converter",
+  "readme": "README.md",
+  "includeVersion": true,
+  "gitRevision": "master",
+  "intentionallyNotExported": [
+    "TClass"
+  ]
+}

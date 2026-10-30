@@ -5,7 +5,16 @@ their timelines as plain, engine-independent data.
 A player for a specific engine (such as `@tawaship/pixi-animate-runtime` for PixiJS) builds on this data,
 so that content made in Animate can be played without running the published code or CreateJS at play time.
 
-**Status: under development.** The format of the extracted data (schema version 0) may still change.
+**Status: under development.** The format of the extracted data may still change between 0.x versions
+(a definition records the version that extracted it, see `converterVersion` below).
+
+API reference: https://tawaship.github.io/animate-data-converter/docs/
+
+**Convert only content you trust.** Extracting runs the published JavaScript, frame scripts included, in
+Node.js. The `vm` context keeps the published code apart from the converter's own objects, but it is not a
+security boundary: code in the file can reach what Node.js can (files, commands, the network) with your
+permissions. Treat a published file as you would treat a script you run: convert content published by you or
+by people you trust.
 
 ## What you need
 
@@ -14,6 +23,12 @@ so that content made in Animate can be played without running the published code
 
 Images and sounds are not read. The converter only needs the JavaScript. CreateJS 1.0.0, the version
 Animate publishes for, comes with the converter (through `@tawaship/createjs-module`); you do not need to provide it.
+
+## Supported versions
+
+- Content published by **Adobe Animate 24.0.15** for HTML5 Canvas. What this package reads is the form of the published
+  JavaScript, which depends on the version of Animate; content published by other versions has not been checked
+- CreateJS 1.0.0, the version Animate publishes for (it comes with the converter)
 
 ## Command line
 
@@ -104,6 +119,57 @@ When the content uses one of these, the converter lists it in `issues` (the comm
 Sounds are not part of the definition. The manifest entries of sounds are kept, and frame scripts that
 call `playSound()` keep that call in their text; whether it plays anything is up to the player.
 
+## Reading a definition
+
+Every type and field of the definition is described in the [API reference](https://tawaship.github.io/animate-data-converter/docs/)
+(`IDefinition` and the types it is made of). This section shows how the parts fit, and what a player has to
+do itself to play a definition the way CreateJS plays the published content.
+
+### How the parts fit
+
+- `symbols[id]` is a symbol of the published library: a MovieClip (`kind: 'movieclip'`), a Sprite or a Bitmap
+- An instance of a MovieClip symbol owns the display objects in `slots`, created in that order. Everything
+  else refers to them by index: tween targets, display list entries, masks, hit areas, `members` (the
+  instance names set as `this.<name>`) and `unmanaged` (children added without the timeline). A slot of a
+  nested MovieClip names its symbol in `symbol`; a Shape's drawing is `graphics[slot.graphics]` of the symbol
+- The timeline is `duration` frames long, with `labels`. Each tween in `tweens` (in timeline order) writes
+  its `props` to its `target`; `frames[position][i]` is the value of `props[i]` at that position. A value is a
+  plain value, `{ graphics: n }` (the Graphics `graphics[n]` of the symbol), or, for the `state` property of an
+  `object` target, the symbol's display list at that frame: the slots on it, bottom to top, with the
+  properties set as each is placed
+- Frame scripts are `actions` of the tweens: the source text of a function and the position it runs at
+- `spriteSheets`, `manifest` and `properties` are those of the published `lib`
+
+Values are recorded for every frame, as they are: a definition is several times, up to about twenty times,
+the size of the published file. Compress it in your own layer when you keep or ship it
+(`@tawaship/pixi-animate-runtime`'s generator does).
+
+### What a player has to do
+
+The definition holds what CreateJS computes for each frame. How CreateJS plays those frames is up to the
+player; to play as CreateJS 1.0.0 does:
+
+- **Playing a timeline**: advance the position every frame, loop as `loop` says, and go to labels. Tween
+  values are written only when the position changes: while a clip plays they are written again on every
+  frame (overriding what scripts wrote to those properties), but a stopped clip, a clip of one frame or a
+  `gotoAndStop` to the current frame writes nothing, so values written by scripts stay. A property not in a
+  tween's `props` is never written by it
+- **Display lists**: on every frame, set the display list from the `state` value, as CreateJS's MovieClip
+  `_addManagedChild` does: an object whose `_off` is true is not placed, and an independent MovieClip with
+  `autoReset` that was not on the list the frame before starts its timeline again
+- **Child clips**: an `independent` clip plays its own timeline. A `synched` or `single` clip shows the frame
+  `startPosition` plus the distance from the start of the current step (`keyframes`) of the tween that placed it
+- **Frame scripts**: run `source` as a function when the timeline reaches its position, with `this` being the
+  instance and the arguments `params` (the tween itself when null). Published scripts expect the names
+  published code has around them: `cjs` / `createjs`, `lib`, and the page's globals (`exportRoot`, `stage`,
+  `playSound`)
+- **Drawing**: compose transforms as CreateJS does (`regX` / `regY`, then rotation and skew, in degrees), apply
+  `alpha`, `visible` and `compositeOperation` (a blend set on a container applies to its contents), clip
+  masks by the shape of their path whatever its fill, apply ColorFilter values, and break Text into lines as
+  CreateJS does (at spaces only; a `lineHeight` of 0 is 1.2 times the width of `M`)
+
+`@tawaship/pixi-animate-runtime` is a player built this way, checked frame by frame against CreateJS.
+
 ## How correctness is checked
 
 The converter was developed with Claude (Anthropic's AI assistant). Its correctness rests on testing rather
@@ -111,6 +177,13 @@ than on trust in the author: for every test content, the definition is written o
 used to rebuild the content, and the rebuilt content is compared with the original running on CreateJS at
 every frame, including drawing commands, images, text, masks, filters, caching and buttons. Known faults
 are put into the definition on purpose to confirm that the comparison notices them.
+
+## Change log
+
+### 0.1.0
+
+- First release: extracts every symbol of content published by Adobe Animate for HTML5 Canvas, with its timeline
+  evaluated at every frame, as plain data (the command line tool and the API), and lists the features it does not support
 
 ## License
 
